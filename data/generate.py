@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import pathlib
 
+import duckdb
 import numpy as np
 import pandas as pd
 import yaml
@@ -367,7 +368,7 @@ def main() -> None:
         "inventory_daily.parquet": inventory,
     }
     for name, frame in outputs.items():
-        frame.to_parquet(RAW / name, index=False)
+        duckdb.sql("SELECT * FROM frame").write_parquet(str(RAW / name))
         print(f"  {name:26} {len(frame):>8,} rows")
 
     ground_truth = {

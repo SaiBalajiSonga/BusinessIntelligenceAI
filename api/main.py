@@ -49,7 +49,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -378,3 +379,13 @@ def processing_split() -> dict:
         f"quantity originates there; the LLM only renders what it is given."
     )
     return s
+
+
+# ----------------------------------------------------------- static UI mount --
+import pathlib
+from fastapi.staticfiles import StaticFiles
+
+_DIST = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
+if _DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="ui")
+

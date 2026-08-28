@@ -30,7 +30,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
+from statsmodels.regression.linear_model import OLS
+from statsmodels.tools.tools import add_constant
 from statsmodels.tsa.seasonal import STL
 
 from engine.contract import Contract, load
@@ -219,14 +220,14 @@ def difference_in_differences(
     def with_fixed_effects(frame: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
         unit_fe = pd.get_dummies(frame["unit"], prefix="u", drop_first=True, dtype=float)
         time_fe = pd.get_dummies(frame["iso_week"], prefix="w", drop_first=True, dtype=float)
-        return sm.add_constant(pd.concat(
+        return add_constant(pd.concat(
             [frame[cols].reset_index(drop=True),
              unit_fe.reset_index(drop=True),
              time_fe.reset_index(drop=True)], axis=1,
         ))
 
-    model = sm.OLS(df["value"].to_numpy(dtype=float),
-                   with_fixed_effects(df, ["did"])).fit(cov_type="HC1")
+    model = OLS(df["value"].to_numpy(dtype=float),
+                with_fixed_effects(df, ["did"])).fit(cov_type="HC1")
     tau = float(model.params["did"])
     lo, hi = (float(x) for x in model.conf_int().loc["did"])
 
@@ -234,8 +235,8 @@ def difference_in_differences(
     pre = df[df["post"] == 0].reset_index(drop=True).copy()
     pre["t"] = pre["iso_week"].map({w: i for i, w in enumerate(window)}).astype(float)
     pre["trend_x_treated"] = pre["t"] * pre["treated"]
-    pt = sm.OLS(pre["value"].to_numpy(dtype=float),
-                with_fixed_effects(pre, ["trend_x_treated"])).fit(cov_type="HC1")
+    pt = OLS(pre["value"].to_numpy(dtype=float),
+             with_fixed_effects(pre, ["trend_x_treated"])).fit(cov_type="HC1")
     pt_p = float(pt.pvalues["trend_x_treated"])
 
     # Judge the pre-trend by what it could account for, not by its p-value.
