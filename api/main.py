@@ -318,10 +318,14 @@ def submit_feedback(body: FeedbackIn) -> dict:
 
 @app.get("/v1/feedback", tags=["feedback"])
 def list_feedback(kpi: str = Query("net_revenue")) -> dict:
+    import pandas as pd
     df = service.store().feedback(kpi)
+    if df is None or not isinstance(df, pd.DataFrame):
+        return {"count": 0, "by_verdict": {}, "rows": []}
     counts = df["verdict"].value_counts().to_dict() if not df.empty else {}
     return {"count": len(df), "by_verdict": counts,
             "rows": df.tail(50).to_dict(orient="records")}
+
 
 
 @app.post("/v1/annotations", tags=["feedback"], status_code=201)
