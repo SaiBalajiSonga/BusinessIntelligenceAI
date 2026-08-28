@@ -23,6 +23,8 @@ from engine.decompose import Decomposition, decompose
 from engine.detect import FOCAL_WEEK, Movement, detect
 from engine.levers import Recommendation, recommend
 from engine.warehouse import connect, freshness
+from feedback.learn import Learning, learn
+from feedback.store import Store, open_store
 from narrative.provider import LLM
 from narrative.synthesize import Narrative, narrate
 
@@ -116,6 +118,27 @@ def freshness_for() -> list[dict]:
 
 def _unkey(scope_key: tuple) -> dict:
     return {k: (list(v) if isinstance(v, tuple) else v) for k, v in scope_key}
+
+
+_STORE: Store | None = None
+
+
+def store() -> Store:
+    """Feedback lives in its own database — DuckDB is single-writer, and the
+    warehouse connection is already held by this process."""
+    global _STORE
+    if _STORE is None:
+        _STORE = open_store()
+    return _STORE
+
+
+def learning_for(week: str, persona_id: str) -> Learning:
+    """Not memoised: the whole point is that it changes when feedback arrives."""
+    return learn(
+        store(), kpi="net_revenue", iso_week=week,
+        current_threshold=float(contract().raw["materiality"]["min_impact_gbp"]),
+        scope=scope_for(persona_id),
+    )
 
 
 _LLM: LLM | None = None

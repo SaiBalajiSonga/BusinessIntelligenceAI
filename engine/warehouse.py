@@ -37,11 +37,30 @@ VIEWS = {
 
 
 def connect(rebuild: bool = False, contract: Contract | None = None) -> duckdb.DuckDBPyConnection:
+    """
+    Open the warehouse read-only once it is built.
+
+    DuckDB allows one writer and no concurrent readers alongside it. Holding a
+    read-write handle meant a running API server locked the file and the test
+    suite could not open it at all. The warehouse is immutable analytical data
+    after the build, so read-only is both the honest mode and the one that lets
+    a server, a notebook and the tests share it. Only building takes the write
+    lock, and feedback lives in its own file precisely so nothing else needs one.
+    """
     contract = contract or load()
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if rebuild and DB_PATH.exists():
         DB_PATH.unlink()
+
+    if DB_PATH.exists():
+        try:
+            handle = duckdb.connect(str(DB_PATH), read_only=True)
+            if _is_built(handle):
+                return handle
+            handle.close()
+        except duckdb.Error:
+            pass        # not built yet, or a writer holds it — fall through
 
     con = duckdb.connect(str(DB_PATH))
     if not _is_built(con):

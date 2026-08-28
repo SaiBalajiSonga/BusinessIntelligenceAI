@@ -18,11 +18,13 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from api import service
 from api.cache import STATS, Timings
 from engine.confidence import ABSTAIN
 from engine.detect import FOCAL_WEEK
+from feedback.store import Annotation, Feedback
 from narrative.provider import TELEMETRY
 
 PERSONAS = ("cfo", "eu_category_manager", "analyst")
@@ -272,6 +274,77 @@ def narrative(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dic
 
 
 # -------------------------------------------------------------- telemetry --
+
+# -------------------------------------------------------------- feedback --
+
+class FeedbackIn(BaseModel):
+    kpi: str = "net_revenue"
+    iso_week: str = FOCAL_WEEK
+    persona: str = "analyst"
+    verdict: str = Field(description="correct | wrong_driver | known_cause | not_material | unclear")
+    driver: str | None = None
+    correct_driver: str | None = None
+    confidence_shown: float | None = None
+    impact_shown: float | None = None
+    comment: str | None = None
+    author: str | None = None
+
+
+class AnnotationIn(BaseModel):
+    label: str
+    starts_on: str
+    ends_on: str | None = None
+    kpi: str | None = "net_revenue"
+    dimension: str | None = None
+    value: str | None = None
+    cause: str | None = None
+    expected: bool = True
+    author: str | None = None
+
+
+@app.post("/v1/feedback", tags=["feedback"], status_code=201)
+def submit_feedback(body: FeedbackIn) -> dict:
+    """
+    A correction, structured rather than free text. A thumbs-down teaches
+    nothing; "the driver was wrong, it was actually X" updates a prior.
+    """
+    try:
+        fb = Feedback(**body.model_dump())
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    return {"id": service.store().record_feedback(fb), "recorded": True}
+
+
+@app.get("/v1/feedback", tags=["feedback"])
+def list_feedback(kpi: str = Query("net_revenue")) -> dict:
+    df = service.store().feedback(kpi)
+    counts = df["verdict"].value_counts().to_dict() if not df.empty else {}
+    return {"count": len(df), "by_verdict": counts,
+            "rows": df.tail(50).to_dict(orient="records")}
+
+
+@app.post("/v1/annotations", tags=["feedback"], status_code=201)
+def add_annotation(body: AnnotationIn) -> dict:
+    """A known event. A planned campaign is not an anomaly."""
+    return {"id": service.store().add_annotation(Annotation(**body.model_dump())),
+            "recorded": True}
+
+
+@app.get("/v1/learning", tags=["feedback"])
+def learning(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
+    """
+    What the loop has learned, and what a later run does differently because
+    of it. Kept as inspectable data rather than hidden inside a model file.
+    """
+    _persona(persona)
+    state = service.learning_for(week, persona)
+    a = service.assessment_for(week, _scope_key(persona))
+    return {
+        "week": week, "persona": persona, "backend": service.store().backend,
+        **state.summary(),
+        "confidence_adjustment": state.adjust(a.score),
+    }
+
 
 @app.get("/v1/telemetry", tags=["meta"])
 def telemetry() -> dict:
