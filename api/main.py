@@ -383,9 +383,31 @@ def processing_split() -> dict:
 
 # ----------------------------------------------------------- static UI mount --
 import pathlib
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 _DIST = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
-if _DIST.exists():
-    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="ui")
+
+if (_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
+
+@app.get("/")
+def serve_root():
+    index_file = _DIST / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+    return {"status": "ok", "message": "KPI Intelligence API is running. Open /docs for Swagger UI."}
+
+@app.get("/{full_path:path}")
+def serve_spa(full_path: str):
+    if full_path.startswith("v1") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
+        raise HTTPException(404, "Not Found")
+    target = _DIST / full_path
+    if target.exists() and target.is_file():
+        return FileResponse(str(target))
+    index_file = _DIST / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+    raise HTTPException(404, "Not Found")
+
 
