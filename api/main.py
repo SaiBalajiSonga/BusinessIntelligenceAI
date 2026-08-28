@@ -282,7 +282,7 @@ class FeedbackIn(BaseModel):
     kpi: str = "net_revenue"
     iso_week: str = FOCAL_WEEK
     persona: str = "analyst"
-    verdict: str = Field(description="correct | wrong_driver | known_cause | not_material | unclear")
+    verdict: str = Field(description="correct | wrong_driver | known_cause | not_material | unclear | hallucination | missed_factor | bad_tone")
     driver: str | None = None
     correct_driver: str | None = None
     confidence_shown: float | None = None

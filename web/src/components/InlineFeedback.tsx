@@ -14,9 +14,11 @@ interface Props {
 
 const NEG_VERDICTS: { value: VerdictType; label: string; desc: string }[] = [
   { value: "wrong_driver", label: "Wrong Driver", desc: "Engine blamed the wrong factor" },
+  { value: "missed_factor", label: "Missed Factor", desc: "Failed to identify a key secondary driver" },
+  { value: "hallucination", label: "Hallucination", desc: "Fabricated numbers or facts" },
+  { value: "bad_tone", label: "Bad Tone", desc: "Inappropriate persona tone or verbosity" },
   { value: "known_cause",  label: "Known Cause",  desc: "Already planned/known event" },
   { value: "not_material", label: "Not Material", desc: "Too small to care about" },
-  { value: "unclear",      label: "Unclear",      desc: "Explanation doesn't make sense" },
 ];
 
 export default function InlineFeedback({

@@ -161,7 +161,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
           <div className="card">
             <div className="card-title" style={{ marginBottom: 12 }}>🧠 Analyst Feedback</div>
             <p className="note" style={{ marginBottom: 14 }}>
-              Your feedback updates driver priors via isotonic calibration.
+              Your feedback updates driver priors via <span className="has-tooltip" data-tooltip="Machine learning method to convert raw confidence scores into true probabilities">isotonic calibration</span>.
             </p>
             <InlineFeedback
               week={week}

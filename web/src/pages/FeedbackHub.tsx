@@ -6,11 +6,14 @@ import type { FeedbackRecord, Learning } from "../types";
 interface Props { week: string; persona: string; }
 
 const VERDICT_STYLE: Record<string, { badge: string; icon: string }> = {
-  correct:      { badge: "badge-confident", icon: "✓" },
-  wrong_driver: { badge: "badge-neg",       icon: "✗" },
-  known_cause:  { badge: "badge-neutral",   icon: "📌" },
-  not_material: { badge: "badge-qualified", icon: "~" },
-  unclear:      { badge: "badge-neutral",   icon: "?" },
+  correct:       { badge: "badge-confident", icon: "?" },
+  wrong_driver:  { badge: "badge-neg",       icon: "?" },
+  missed_factor: { badge: "badge-warning",   icon: "??" },
+  hallucination: { badge: "badge-critical",  icon: "??" },
+  bad_tone:      { badge: "badge-neutral",   icon: "??" },
+  known_cause:   { badge: "badge-neutral",   icon: "??" },
+  not_material:  { badge: "badge-qualified", icon: "~" },
+  unclear:       { badge: "badge-neutral",   icon: "?" },
 };
 
 export default function FeedbackHub({ week, persona }: Props) {

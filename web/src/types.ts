@@ -1,6 +1,6 @@
 export type Band = "confident" | "qualified" | "abstain";
 export type CauseStatus = "named lever" | "named constraint" | "localised" | "unattributed";
-export type VerdictType = "correct" | "wrong_driver" | "known_cause" | "not_material" | "unclear";
+export type VerdictType = "correct" | "wrong_driver" | "known_cause" | "not_material" | "unclear" | "hallucination" | "missed_factor" | "bad_tone";
 
 export interface Cause {
   factor: string;

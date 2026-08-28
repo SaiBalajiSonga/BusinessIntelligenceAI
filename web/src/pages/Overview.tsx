@@ -91,7 +91,11 @@ export default function Overview({ week, persona }: Props) {
               <div className="kpi-tile-label">
                 {m.label}
                 {m.material && (
-                  <span className="badge badge-neg" style={{ marginLeft: 8 }}>
+                  <span 
+                    className="badge badge-neg has-tooltip" 
+                    style={{ marginLeft: 8 }}
+                    data-tooltip="Exceeds statistical (Z > 2.5) and business (GBP 150k) thresholds"
+                  >
                     material
                   </span>
                 )}
@@ -110,7 +114,9 @@ export default function Overview({ week, persona }: Props) {
                 <span style={{ color: "var(--muted)", fontSize: 11 }}>vs expected</span>
               </div>
               <div className="kpi-tile-foot">
-                Z = {m.z.toFixed(2)} · {m.history_weeks}w history · {m.baseline_method}
+                <span className="has-tooltip" data-tooltip="Z-score: Number of standard deviations away from the historical baseline">
+                  Z = {m.z.toFixed(2)}
+                </span> · {m.history_weeks}w history · {m.baseline_method}
               </div>
             </div>
           );
@@ -183,8 +189,8 @@ export default function Overview({ week, persona }: Props) {
                 { label: "LLM Calls", value: String(telemetry.llm.calls), sub: `${telemetry.llm.cache_hits} cached` },
                 { label: "Token Cost", value: `$${telemetry.llm.cost_usd.toFixed(4)}`, sub: "reference rate" },
                 { label: "Tokens In/Out", value: `${(telemetry.llm.input_tokens/1000).toFixed(1)}k / ${(telemetry.llm.output_tokens/1000).toFixed(1)}k`, sub: "prompt / completion" },
-                { label: "P50 Latency", value: fmt.ms(telemetry.llm.p50_latency_ms), sub: "LLM only" },
-                { label: "Analysis Cache", value: fmt.pct(telemetry.analysis_cache.hit_rate, 0), sub: "hit rate" },
+                { label: "P50 Latency", value: fmt.ms(telemetry.llm.p50_latency_ms), sub: "LLM only", tooltip: "Median response time: 50% of requests are faster than this" },
+                { label: "Analysis Cache", value: fmt.pct(telemetry.analysis_cache.hit_rate, 0), sub: "hit rate", tooltip: "Percentage of requests served instantly from memory without waking the LLM" },
                 { label: "Cache Note", value: "7s cold", sub: "instant from cache" },
               ].map((s) => (
                 <div key={s.label} style={{
@@ -193,7 +199,13 @@ export default function Overview({ week, persona }: Props) {
                   borderRadius: "var(--radius-sm)",
                   border: "1px solid var(--border)",
                 }}>
-                  <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</div>
+                  <div 
+                    style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}
+                    className={s.tooltip ? "has-tooltip" : ""}
+                    data-tooltip={s.tooltip}
+                  >
+                    {s.label}
+                  </div>
                   <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)", marginTop: 4 }}>{s.value}</div>
                   <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{s.sub}</div>
                 </div>

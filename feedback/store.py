@@ -28,7 +28,7 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-VERDICTS = ("correct", "wrong_driver", "known_cause", "not_material", "unclear")
+VERDICTS = ("correct", "wrong_driver", "known_cause", "not_material", "unclear", "hallucination", "missed_factor", "bad_tone")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FEEDBACK_DB = ROOT / "warehouse" / "feedback.duckdb"
