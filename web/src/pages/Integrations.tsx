@@ -3,11 +3,11 @@ import { api } from "../api";
 import Loader from "../components/Loader";
 
 const CONNECTORS = [
-  { id: "snowflake", name: "Snowflake", icon: "❄️", desc: "Connect to your Snowflake Data Cloud" },
-  { id: "bigquery", name: "Google BigQuery", icon: "🔍", desc: "Connect to your GCP Data Warehouse" },
-  { id: "postgresql", name: "PostgreSQL", icon: "🐘", desc: "Connect to standard PostgreSQL databases" },
-  { id: "redshift", name: "Amazon Redshift", icon: "🧱", desc: "Connect to your AWS Data Warehouse" },
-  { id: "databricks", name: "Databricks", icon: "🧱", desc: "Connect to Databricks SQL or Spark" },
+  { id: "snowflake", name: "Snowflake", icon: "??", desc: "Connect to your Snowflake Data Cloud" },
+  { id: "bigquery", name: "Google BigQuery", icon: "??", desc: "Connect to your GCP Data Warehouse" },
+  { id: "postgresql", name: "PostgreSQL", icon: "??", desc: "Connect to standard PostgreSQL databases" },
+  { id: "redshift", name: "Amazon Redshift", icon: "??", desc: "Connect to your AWS Data Warehouse" },
+  { id: "databricks", name: "Databricks", icon: "??", desc: "Connect to Databricks SQL or Spark" },
 ];
 
 export default function Integrations() {
@@ -50,7 +50,7 @@ export default function Integrations() {
       {step === "configure" && (
         <div className="card" style={{ maxWidth: 500, margin: "0 auto" }}>
           <div className="card-title" style={{ marginBottom: 20 }}>Configure {selected.name} Connection</div>
-          {error && <div className="error-banner" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
+          {error && <div className="error-banner" style={{ marginBottom: 16 }}>?? {error}</div>}
           
           <div className="form-field">
             <label className="form-label">Host URL</label>
@@ -82,7 +82,7 @@ export default function Integrations() {
 
       {step === "success" && (
         <div className="card" style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>?</div>
           <div className="card-title" style={{ marginBottom: 8 }}>Connection Successful!</div>
           <p className="card-sub" style={{ marginBottom: 24 }}>
             Successfully connected to {selected.name}. The engine introspected 14 dimensional tables and automatically generated the semantic <code>kpis.yaml</code> contract.

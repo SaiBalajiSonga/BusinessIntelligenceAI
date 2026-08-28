@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router
 import { api } from "./api";
 import CommandPalette from "./components/CommandPalette";
 import ToastContainer from "./components/Toast";
+import Integrations from "./pages/Integrations";
 import Overview from "./pages/Overview";
 import DeepDive from "./pages/DeepDive";
 import Governance from "./pages/Governance";
@@ -148,6 +149,7 @@ function AppShell() {
                 <FeedbackHub week={FOCAL_WEEK} persona={persona} />
               </div>
             } />
+            <Route path="/integrations" element={<Integrations />} />
           </Routes>
         </div>
       </main>
