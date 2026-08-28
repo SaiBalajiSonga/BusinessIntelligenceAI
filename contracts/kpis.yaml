@@ -24,6 +24,18 @@ baseline_calibration:
   method: rolling_origin_backtest
   window_weeks: 26
 
+# Rung 3. Ranking slices by the size of their movement just returns the biggest
+# markets every week. Surprise — how far a slice departed from its own expected
+# share of the whole — is what makes a small slice breaking its pattern rank
+# above a large one moving proportionally.
+attribution:
+  method: adtributor
+  rank_by: surprise
+  divergence: jensen_shannon
+  min_explanatory_power: 0.02    # ignore slices that barely move the total
+  max_depth: 3
+  top_n: 5
+
 # ---------------------------------------------------------------- sources --
 
 sources:
