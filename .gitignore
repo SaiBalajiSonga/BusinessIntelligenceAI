@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+
+# generated — rebuild with `python data/generate.py`
+data/raw/
+warehouse/*.duckdb
+
+.DS_Store
+.env

@@ -1,0 +1,80 @@
+seed: 20260828
+focal_week: 2026-W32
+date_range:
+  start: '2023-09-04'
+  end: '2026-08-23'
+note: Effects the engine is expected to recover. Written from the same definitions the generator
+  applies, so it cannot drift.
+effects:
+  DISCOUNT_HG_DE_FR:
+    window: &id001
+    - '2026-07-20'
+    - '2026-08-23'
+    scope:
+      region:
+      - DE
+      - FR
+      category:
+      - Home & Garden
+    mechanism: Discount depth stepped from ~7.5% to ~26% to clear summer stock.
+    expect: Large negative PRICE effect in the price/volume/mix bridge, partly offset by a
+      positive volume effect (elasticity -0.6).
+    detect_at: Rung 2 (exact)
+    params:
+      discount_to: 0.26
+      unit_elasticity: -0.6
+  STOCKOUT_ELEC_NL:
+    window:
+    - '2026-07-27'
+    - '2026-08-16'
+    scope:
+      region:
+      - NL
+      sku:
+      - ELEC-002
+    mechanism: Supplier delay; fill rate collapsed to ~0.30.
+    expect: "Negative VOLUME effect concentrated in one small slice \u2014 should surface\
+      \ via surprise ranking, not size ranking."
+    detect_at: Rung 3 (exact)
+    params:
+      units_multiplier: 0.3
+      fill_rate: 0.3
+  COMPETITOR_DE:
+    window: *id001
+    scope:
+      region:
+      - DE
+    mechanism: Competitor price cut in DE depressed conversion by ~12%.
+    expect: "Conversion-rate driver. Not derivable from the KPI tree \u2014 needs a control\
+      \ group (FR/ES/NL) to estimate."
+    detect_at: Rung 4 (assumption-bearing)
+    params:
+      conversion_multiplier: 0.88
+  MIX_SHIFT_BEAUTY:
+    window:
+    - '2026-07-13'
+    - '2026-08-23'
+    scope:
+      category:
+      - Beauty
+    mechanism: Paid campaign pushed entry-price Beauty lines; basket mix tilted toward cheaper
+      SKUs.
+    expect: "Negative MIX effect on AOV while unit volume holds \u2014 the case that is invisible\
+      \ without a PVM bridge."
+    detect_at: Rung 2 (exact)
+    params:
+      category_mix_boost: 1.35
+      cheap_sku_boost: 1.6
+  NEW_LAUNCH_HOME:
+    window:
+    - '2026-07-06'
+    - '2026-08-23'
+    scope:
+      sku:
+      - HOME-NEW-01
+    mechanism: New SKU launched with no prior history.
+    expect: "Too few periods for an STL baseline \u2014 must fall back to peer benchmarking\
+      \ and cap confidence."
+    detect_at: Rung 0 fallback (sparse history)
+    params:
+      launch_date: '2026-07-06'

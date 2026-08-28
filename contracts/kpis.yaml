@@ -1,0 +1,275 @@
+# The governance artifact.
+#
+# Detection thresholds, the decomposition chain, driver candidates and access
+# rules all read from this file. Nothing about the business is hardcoded in
+# Python — changing behaviour for a new KPI means editing here, not there.
+
+version: 1
+currency: GBP
+calendar: iso_week
+as_of: "2026-08-24"
+
+# The business half of the materiality test. Applied in currency so KPIs in
+# different units are weighed on one scale; the per-KPI min_abs_delta below is
+# the fallback for anything that cannot be translated (fill rate).
+materiality:
+  min_impact_gbp: 150000
+
+# How the statistical bar is calibrated. In-sample STL residuals understate the
+# error badly when only a few seasonal cycles exist — the seasonal smoother
+# fits each phase almost exactly and the residuals collapse toward zero. The
+# honest ruler is how wrong this baseline has actually been on weeks it had not
+# seen, so the scale comes from a rolling one-step-ahead backtest.
+baseline_calibration:
+  method: rolling_origin_backtest
+  window_weeks: 26
+
+# ---------------------------------------------------------------- sources --
+
+sources:
+  sales:
+    path: data/raw/sales.parquet
+    native_grain: [date, region, channel, category, sku]
+    refresh_cadence_hours: 24
+    sla_hours: 24
+    lineage: warehouse.fct_order_line
+    governance: governed
+
+  traffic:
+    path: data/raw/traffic.parquet
+    native_grain: [date, region, channel]
+    refresh_cadence_hours: 24
+    sla_hours: 24
+    lineage: warehouse.fct_web_session
+    governance: governed
+
+  marketing:
+    path: data/raw/marketing_weekly.parquet
+    native_grain: [iso_week, region, channel, campaign]
+    coarser_than_analysis: true          # weekly — must be allocated before daily use
+    reconciliation: allocate_uniform_to_day
+    reconciliation_note: >
+      Weekly spend is divided evenly across the 7 days of its week. Stated rule,
+      not a measurement — anything derived from it is tagged as allocated.
+    refresh_cadence_hours: 6
+    sla_hours: 6
+    lineage: adplatform.api.campaign_spend
+    governance: loosely_governed
+
+  inventory:
+    path: data/raw/inventory_daily.parquet
+    native_grain: [date, region, sku]
+    refresh_cadence_hours: 24
+    sla_hours: 24
+    known_lag_days: 2                    # ERP drop is always two days behind
+    lineage: erp.stock_position
+    governance: loosely_governed
+
+# ------------------------------------------------------------- dimensions --
+
+dimensions:
+  region:   {values: [DE, UK, FR, ES, NL], sliceable: true, entitlement_scoped: true}
+  channel:  {values: [web, mobile_app, marketplace], sliceable: true}
+  category: {values: ["Home & Garden", Electronics, Apparel, Beauty], sliceable: true}
+  sku:      {values: null, sliceable: true, high_cardinality: true}
+
+# -------------------------------------------------------------------- KPIs --
+
+kpis:
+  net_revenue:
+    label: Net Revenue
+    tier: 1
+    unit: currency
+    view: week_rcs
+    expr: "sum(net_revenue)"
+    direction: higher_is_better
+    sliceable_by: [region, channel, category, sku]
+    lineage: [sales]
+    impact_multipliers: []                     # already currency
+    materiality: {min_abs_delta: 250000, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
+    children: [orders, aov]
+
+  orders:
+    label: Orders
+    tier: 2
+    unit: count
+    view: week_rc
+    expr: "sum(orders)"
+    direction: higher_is_better
+    sliceable_by: [region, channel]
+    lineage: [traffic]
+    impact_multipliers: [aov]
+    materiality: {min_abs_delta: 3000, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
+    children: [sessions, conversion_rate]
+
+  sessions:
+    label: Sessions
+    tier: 3
+    unit: count
+    view: week_rc
+    expr: "sum(sessions)"
+    direction: higher_is_better
+    sliceable_by: [region, channel]
+    lineage: [traffic]
+    impact_multipliers: [conversion_rate, aov]
+    materiality: {min_abs_delta: 90000, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
+
+  conversion_rate:
+    label: Conversion Rate
+    tier: 2
+    unit: ratio
+    view: week_rc
+    expr: "sum(orders)::DOUBLE / nullif(sum(sessions), 0)"
+    direction: higher_is_better
+    sliceable_by: [region, channel]      # deliberately NOT sku — sessions have no SKU
+    lineage: [traffic]
+    impact_multipliers: [sessions, aov]
+    materiality: {min_abs_delta: 0.0012, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
+
+  aov:
+    label: Average Order Value
+    tier: 2
+    unit: currency
+    view: week_rc
+    expr: "sum(net_revenue) / nullif(sum(orders), 0)"
+    direction: higher_is_better
+    sliceable_by: [region, channel]
+    lineage: [sales, traffic]
+    impact_multipliers: [orders]
+    materiality: {min_abs_delta: 2.00, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
+
+  gross_margin_pct:
+    label: Gross Margin %
+    tier: 1
+    unit: ratio
+    view: week_rcs
+    expr: "(sum(net_revenue) - sum(cogs)) / nullif(sum(net_revenue), 0)"
+    direction: higher_is_better
+    sliceable_by: [region, channel, category, sku]
+    lineage: [sales]
+    impact_multipliers: [net_revenue]
+    materiality: {min_abs_delta: 0.010, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
+    restricted: true                     # masked for non-finance personas
+
+  fill_rate:
+    label: Fill Rate
+    tier: 3
+    unit: ratio
+    view: week_inventory
+    expr: "avg(fill_rate)"
+    direction: higher_is_better
+    sliceable_by: [region, sku]
+    lineage: [inventory]
+    impact_multipliers: null                   # not directly monetisable
+    materiality: {min_abs_delta: 0.010, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
+
+# ---------------------------------------------------------- decomposition --
+#
+# The exact multiplicative identity behind Net Revenue. LMDI (Rung 1) splits a
+# movement across these four factors with no residual. The identity is asserted
+# in tests — if it stops holding, the data is wrong, not the maths.
+
+decompositions:
+  net_revenue:
+    method: lmdi
+    view: week_rc
+    identity: "sessions * conversion_rate * units_per_order * asp = net_revenue"
+    chain:
+      - {factor: sessions,        label: Traffic,       expr: "sum(sessions)"}
+      - {factor: conversion_rate, label: Conversion,    expr: "sum(orders)::DOUBLE / nullif(sum(sessions),0)"}
+      - {factor: units_per_order, label: Basket size,   expr: "sum(units) / nullif(sum(orders),0)"}
+      - {factor: asp,             label: Selling price, expr: "sum(net_revenue) / nullif(sum(units),0)"}
+    then:
+      # once ASP is implicated, Rung 2 splits it three ways
+      method: price_volume_mix
+      view: week_rcs
+      at_grain: sku
+
+# ------------------------------------------------------- driver candidates --
+
+drivers:
+  discount_depth:
+    label: Discount depth
+    type: controllable
+    source: sales
+    view: week_rcs
+    expr: "avg(discount_pct)"
+    lag_weeks: [0, 1]
+    owner_role: category_manager
+
+  marketing_spend:
+    label: Marketing spend
+    type: controllable
+    source: marketing
+    view: week_marketing
+    expr: "sum(spend)"
+    lag_weeks: [0, 2]
+    reconciliation_flag: allocated
+    owner_role: marketing_lead
+
+  fill_rate:
+    label: Stock availability
+    type: constraint
+    source: inventory
+    view: week_inventory
+    expr: "avg(fill_rate)"
+    lag_weeks: [0, 1]
+    freshness_caveat: true               # source is 2 days stale by design
+    owner_role: supply_planner
+
+  competitor_price_index:
+    label: Competitor pricing
+    type: external
+    source: null                         # NOT INSTRUMENTED — deliberately
+    note: >
+      We have no feed for competitor prices. The engine therefore cannot observe
+      this driver directly and must either infer it from a control-group
+      comparison (Rung 4) or leave it in the unexplained residual. This is the
+      main source of honest uncertainty in the demo.
+    owner_role: pricing_council
+
+# --------------------------------------------------------------- personas --
+
+personas:
+  cfo:
+    label: Chief Financial Officer
+    regions: [DE, UK, FR, ES, NL]
+    masked_columns: []
+    max_detail: category
+    horizon: quarter
+
+  eu_category_manager:
+    label: EU Category Manager
+    regions: [DE, FR, NL]                # row filter applied BEFORE any analysis
+    masked_columns: [cogs, unit_cost, gross_margin_pct]
+    max_detail: sku
+    horizon: week
+
+  analyst:
+    label: Data Analyst
+    regions: [DE, UK, FR, ES, NL]
+    masked_columns: []
+    max_detail: sku
+    horizon: week
+    show_method_detail: true
+
+# ------------------------------------------------------------- confidence --
+
+confidence:
+  weights:
+    coverage: 0.45          # share of the movement actually accounted for
+    freshness: 0.15
+    history_depth: 0.15
+    method_strength: 0.15
+    contradiction: -0.20
+  bands:
+    confident: 0.75         # narrate
+    qualified: 0.45         # narrate with caveats + alternative hypothesis
+    # below qualified -> abstain, and the LLM is never called

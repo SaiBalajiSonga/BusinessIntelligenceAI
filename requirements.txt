@@ -1,0 +1,21 @@
+# --- core analytics (Zone A + B) ---
+duckdb>=1.1
+pandas>=2.2
+numpy>=2.0
+pyarrow>=17.0
+scipy>=1.14
+statsmodels>=0.14      # STL decomposition (Rung 0)
+
+# --- contract + config ---
+pyyaml>=6.0
+pydantic>=2.8          # types the Evidence Object
+
+# --- api ---
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# --- added later, kept here so the list is the full picture ---
+# scikit-learn>=1.5    # Isolation Forest, isotonic calibration, nearest neighbour
+# econml>=0.15         # Double ML (Rung 4)
+
+pytest>=8.0
