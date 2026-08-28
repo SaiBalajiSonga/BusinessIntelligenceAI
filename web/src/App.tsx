@@ -68,7 +68,7 @@ function TopNav({
       </div>
 
       {/* Lower bar: Navigation Tabs */}
-      <div style={{ display: 'flex', padding: '0 32px', gap: '32px', background: 'var(--surface-2)' }}>
+      <div style={{ display: 'flex', padding: '0 32px', gap: '32px' }}>
         {NAV.map(item => {
           const active = item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
           return (
