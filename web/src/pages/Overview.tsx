@@ -82,7 +82,7 @@ export default function Overview({ week, persona }: Props) {
       )}
 
       {/* KPI Tiles */}
-      <div className="tiles-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+      <div className="tiles-grid">
         {movements.map((m) => {
           const pct = m.delta_pct ?? 0;
           const isPos = m.delta >= 0;
