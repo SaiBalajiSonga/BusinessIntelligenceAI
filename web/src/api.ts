@@ -1,10 +1,26 @@
 import type {
-  Actions, Attribution, Freshness, Insight, Narrative, Persona, Split, Telemetry,
+  Actions, AnnotationIn, Attribution, Contract, FeedbackIn, Freshness,
+  Insight, Learning, Movement, Narrative, Persona, Split, Telemetry,
 } from "./types";
+
+const BASE = "/v1";
 
 async function get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`/v1/${path}${qs ? `?${qs}` : ""}`);
+  const res = await fetch(`${BASE}/${path}${qs ? `?${qs}` : ""}`);
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? `${path} failed (${res.status})`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail ?? `${path} failed (${res.status})`);
@@ -13,21 +29,42 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
 }
 
 export const api = {
+  // Meta
   personas: () => get<Persona[]>("personas"),
   freshness: () => get<Freshness[]>("freshness"),
+  telemetry: () => get<Telemetry>("telemetry"),
+  split: () => get<Split>("processing-split"),
+  contract: () => get<Contract>("contract"),
+
+  // Analysis
+  movements: (week: string, persona: string) =>
+    get<{ week: string; movements: Movement[] }>("movements", { week, persona }),
   insight: (week: string, persona: string) => get<Insight>("insight", { week, persona }),
   narrative: (week: string, persona: string) => get<Narrative>("narrative", { week, persona }),
   actions: (week: string, persona: string) => get<Actions>("actions", { week, persona }),
-  attribution: (week: string, persona: string) => get<Attribution>("attribution", { week, persona }),
-  telemetry: () => get<Telemetry>("telemetry"),
-  split: () => get<Split>("processing-split"),
+  attribution: (week: string, persona: string) =>
+    get<Attribution>("attribution", { week, persona }),
+
+  // Feedback
+  submitFeedback: (body: FeedbackIn) =>
+    post<{ id: string; recorded: boolean }>("feedback", body),
+  listFeedback: (kpi = "net_revenue") =>
+    get<{ count: number; by_verdict: Record<string, number>; rows: unknown[] }>(
+      "feedback", { kpi }
+    ),
+  addAnnotation: (body: AnnotationIn) =>
+    post<{ id: string; recorded: boolean }>("annotations", body),
+  learning: (week: string, persona: string) => get<Learning>("learning", { week, persona }),
 };
 
 export const fmt = {
   money(v: number | null, currency = "GBP"): string {
     if (v === null || v === undefined) return "—";
     const sign = v < 0 ? "−" : "+";
-    return `${sign}${Math.abs(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })} ${currency}`;
+    return `${sign}£${Math.abs(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
+  },
+  moneyRaw(v: number, currency = "GBP"): string {
+    return `£${Math.abs(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
   },
   abs(v: number): string {
     return Math.abs(v).toLocaleString("en-GB", { maximumFractionDigits: 0 });
@@ -37,5 +74,9 @@ export const fmt = {
   },
   ms(v: number): string {
     return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`;
+  },
+  date(iso: string): string {
+    try { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+    catch { return iso; }
   },
 };

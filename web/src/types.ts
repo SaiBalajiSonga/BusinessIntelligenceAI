@@ -1,5 +1,6 @@
 export type Band = "confident" | "qualified" | "abstain";
 export type CauseStatus = "named lever" | "named constraint" | "localised" | "unattributed";
+export type VerdictType = "correct" | "wrong_driver" | "known_cause" | "not_material" | "unclear";
 
 export interface Cause {
   factor: string;
@@ -128,3 +129,107 @@ export interface Telemetry {
 
 export interface DrillStep { dimension: string; chosen: string | null }
 export interface Attribution { path: DrillStep[] }
+
+// --- New types for additional endpoints ---
+
+export interface Movement {
+  kpi: string;
+  label: string;
+  unit: string;
+  actual: number;
+  expected: number;
+  delta: number;
+  delta_pct: number;
+  z: number;
+  impact_gbp: number | null;
+  material: boolean;
+  baseline_method: string;
+  history_weeks: number;
+  backtest_weeks: number;
+  not_flagged_because: string[];
+}
+
+export interface KpiContract {
+  label: string;
+  tier: number;
+  unit: string;
+  direction: string;
+  lineage: string[];
+  materiality: { min_abs_delta: number; min_z: number };
+  restricted?: boolean;
+}
+
+export interface SourceContract {
+  path: string;
+  native_grain: string[];
+  refresh_cadence_hours: number;
+  sla_hours: number;
+  lineage: string;
+  governance: string;
+  known_lag_days?: number;
+}
+
+export interface Contract {
+  version: number;
+  currency: string;
+  as_of: string;
+  kpis: Record<string, KpiContract>;
+  sources: Record<string, SourceContract>;
+  drivers: Record<string, unknown>;
+  levers: Record<string, unknown>;
+  personas: Record<string, unknown>;
+  confidence: unknown;
+  attribution: unknown;
+  causal: unknown;
+  decompositions: unknown;
+}
+
+export interface Learning {
+  week: string;
+  persona: string;
+  backend: string;
+  feedback_count: number;
+  calibration_adjustment: number;
+  confidence_adjustment: number;
+  driver_priors?: Record<string, number>;
+}
+
+export interface FeedbackRecord {
+  id: string;
+  created_at: string;
+  kpi: string;
+  iso_week: string;
+  persona: string;
+  verdict: VerdictType;
+  driver: string | null;
+  correct_driver: string | null;
+  confidence_shown: number | null;
+  impact_shown: number | null;
+  comment: string | null;
+  author: string | null;
+}
+
+export interface FeedbackIn {
+  kpi?: string;
+  iso_week?: string;
+  persona?: string;
+  verdict: VerdictType;
+  driver?: string | null;
+  correct_driver?: string | null;
+  confidence_shown?: number | null;
+  impact_shown?: number | null;
+  comment?: string | null;
+  author?: string | null;
+}
+
+export interface AnnotationIn {
+  label: string;
+  starts_on: string;
+  ends_on?: string | null;
+  kpi?: string | null;
+  dimension?: string | null;
+  value?: string | null;
+  cause?: string | null;
+  expected?: boolean;
+  author?: string | null;
+}
