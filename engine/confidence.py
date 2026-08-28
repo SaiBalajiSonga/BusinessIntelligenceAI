@@ -66,25 +66,40 @@ ACTIONS = {
 
 # ------------------------------------------------------- driver movement --
 
-def driver_moved(
+@dataclass
+class DriverState:
+    """Where an observable driver actually sits against its own baseline."""
+    driver: str
+    moved: bool
+    relative: float
+    evidence: str
+    actual: float | None = None
+    expected: float | None = None
+    scope: dict[str, Any] | None = None
+
+    def as_tuple(self) -> tuple[bool, float, str]:
+        return self.moved, self.relative, self.evidence
+
+
+def driver_state(
     con, contract: Contract, driver_id: str, week: str,
     filters: dict[str, Any] | None = None, min_rel: float = 0.10,
-) -> tuple[bool, float, str]:
-    """Did an observable driver depart from its own baseline this week?"""
+) -> DriverState:
+    """Did an observable driver depart from its own baseline this week, and by how much?"""
     spec = contract.drivers[driver_id]
     if not spec.get("source") or not spec.get("view"):
-        return False, 0.0, "not instrumented"
+        return DriverState(driver_id, False, 0.0, "not instrumented", scope=filters)
 
     frame = series(con, view_named(spec["view"]), spec["expr"], filters)
     weeks = frame["iso_week"].tolist()
     if week not in weeks:
-        return False, 0.0, "no data for this week"
+        return DriverState(driver_id, False, 0.0, "no data for this week", scope=filters)
 
     idx = weeks.index(week)
     values = frame["value"].to_numpy(dtype=float)
     expected = _expectation(values, idx, PERIOD, MIN_HISTORY)
     if expected is None or expected == 0:
-        return False, 0.0, "no baseline"
+        return DriverState(driver_id, False, 0.0, "no baseline", scope=filters)
 
     actual = float(values[idx])
     rel = (actual - expected) / abs(expected)
@@ -95,11 +110,21 @@ def driver_moved(
         # verbatim, and "3.31e+05" is not a figure any reader can check
         return f"{v:,.0f}" if abs(v) >= 1000 else f"{v:.4f}"
 
-    return (
-        abs(rel) >= min_rel,
-        rel,
-        f"{spec['label']}{where} {fmt(actual)} vs {fmt(expected)} expected ({rel:+.0%})",
+    return DriverState(
+        driver=driver_id,
+        moved=abs(rel) >= min_rel,
+        relative=rel,
+        evidence=f"{spec['label']}{where} {fmt(actual)} vs {fmt(expected)} expected ({rel:+.0%})",
+        actual=actual, expected=float(expected), scope=filters,
     )
+
+
+def driver_moved(
+    con, contract: Contract, driver_id: str, week: str,
+    filters: dict[str, Any] | None = None, min_rel: float = 0.10,
+) -> tuple[bool, float, str]:
+    """Tuple form, kept because the assessment path reads it that way."""
+    return driver_state(con, contract, driver_id, week, filters, min_rel).as_tuple()
 
 
 # ---------------------------------------------------------------- result --
@@ -114,6 +139,7 @@ class Cause:
     evidence: str
     drivers: list[str] = field(default_factory=list)
     owner: str | None = None
+    scope: dict[str, Any] | None = None      # where the lever should be pulled
 
     @property
     def credit(self) -> float:
@@ -182,21 +208,23 @@ def assess(
 
             status, evidence, owner = UNATTRIBUTED, "no driver identified", None
             drivers: list[str] = []
+            scope: dict[str, Any] | None = None
 
             if factor == "price":
+                scope = {"region": ["DE", "FR"], "category": "Home & Garden"}
                 moved, rel, ev = driver_moved(
-                    con, contract, "discount_depth", week,
-                    {"region": ["DE", "FR"], "category": "Home & Garden"},
+                    con, contract, "discount_depth", week, scope,
                 )
                 if moved:
                     status, evidence, drivers = NAMED_LEVER, ev, ["discount_depth"]
                     owner = contract.drivers["discount_depth"]["owner_role"]
 
             elif factor == "mix":
+                # the drill already located the constraint; aim the lever there
+                scope = {k: v for k, v in hot.items() if k in ("region", "sku")} or None
                 spend_moved, _, spend_ev = driver_moved(con, contract, "marketing_spend", week)
                 fill_moved, _, fill_ev = driver_moved(
-                    con, contract, "fill_rate", week,
-                    {k: v for k, v in hot.items() if k in ("region", "sku")} or None,
+                    con, contract, "fill_rate", week, scope,
                 )
                 if spend_moved or fill_moved:
                     status = NAMED_LEVER if spend_moved else NAMED_CONSTRAINT
@@ -225,6 +253,7 @@ def assess(
             causes.append(Cause(
                 factor=factor, label=node.label, gbp=gbp, rung=node.rung,
                 status=status, evidence=evidence, drivers=drivers, owner=owner,
+                scope=scope,
             ))
 
     # ---- coverage ------------------------------------------------------

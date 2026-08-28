@@ -259,6 +259,45 @@ def decompose(
     )
 
 
+# ----------------------------------------------------- per-SKU attribution --
+
+def asp_split_by_sku(
+    con, contract: Contract, week: str = FOCAL_WEEK, filters: dict[str, Any] | None = None
+) -> dict[str, dict[str, float]]:
+    """
+    The price and mix terms broken out per SKU, in currency.
+
+    Bennet is already a sum over SKUs, so this is not a new estimate — it is the
+    same decomposition read before it is totalled. It lets a shared cause be
+    divided between the drivers behind it by measurement rather than by
+    apportionment: the stockout's share of the mix effect is ELEC-002's own term,
+    not a fraction assigned to it.
+
+    The per-SKU values sum exactly to the ASP contribution from Rung 1.
+    """
+    d = decompose(con, contract, week, filters)
+    asp_node = next(c for c in d.contributions if c.factor == "asp")
+
+    state, _ = _sku_state(con, week, filters)
+    q0, p0 = state["exp_units"], state["exp_asp"]
+    q1, p1 = state["act_units"], state["act_asp"]
+
+    total_q0, total_q1 = q0.sum(), q1.sum()
+    w0 = q0 / total_q0 if total_q0 else q0 * 0.0
+    w1 = q1 / total_q1 if total_q1 else q1 * 0.0
+
+    price_s = ((w0 + w1) / 2.0) * (p1 - p0)
+    mix_s = ((p0 + p1) / 2.0) * (w1 - w0)
+
+    delta_asp = float(price_s.sum() + mix_s.sum())
+    scale = asp_node.gbp / delta_asp if abs(delta_asp) > 1e-12 else 0.0
+
+    return {
+        str(sku): {"price": float(price_s[sku] * scale), "mix": float(mix_s[sku] * scale)}
+        for sku in state.index
+    }
+
+
 # ------------------------------------------------------------------ output --
 
 def _num(value: float) -> str:

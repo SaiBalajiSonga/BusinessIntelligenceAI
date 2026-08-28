@@ -14,6 +14,7 @@ as_of: "2026-08-24"
 # the fallback for anything that cannot be translated (fill rate).
 materiality:
   min_impact_gbp: 150000
+  min_action_impact_gbp: 25000   # below this, a recommendation is noise
 
 # How the statistical bar is calibrated. In-sample STL residuals understate the
 # error badly when only a few seasonal cycles exist — the seasonal smoother
@@ -291,6 +292,83 @@ drivers:
       comparison (Rung 4) or leave it in the unexplained residual. This is the
       main source of honest uncertainty in the demo.
     owner_role: pricing_council
+
+# ----------------------------------------------------------------- levers --
+# driver -> controllable lever -> action -> expected impact -> owner ->
+# confidence -> monitoring plan.
+#
+# Expected impact is COMPUTED, never written by the model. It is the measured
+# contribution of that driver scaled by how much of the driver's deviation the
+# action actually reverses — so it inherits the evidence behind it rather than
+# being an independent guess. The linearity that implies is stated on every
+# recommendation, not buried here.
+
+levers:
+  discount_depth:
+    label: Promotional depth
+    owner_role: category_manager
+    decision_rights: changes beyond 5pp require Pricing Council sign-off
+    scope: inherit                   # act where the cause was located
+    target: 0.12                     # a RATE — the same number at any scope
+    horizon_weeks: 2
+    action: Step {scope} discount depth from {current} to {target} over {weeks} weeks
+    monitoring:
+      metrics: [asp, units, gross_margin_pct]
+      cadence: daily
+      horizon_days: 14
+      guardrail: halt if units fall more than 8% week-on-week
+
+  marketing_spend:
+    label: Campaign mix
+    owner_role: marketing_lead
+    decision_rights: within the approved quarterly budget envelope
+    scope: portfolio                 # the campaign ran everywhere; the stockout
+                                     # scope that located the constraint is not
+                                     # where this lever is pulled
+    target_relative_to_baseline: 1.0
+    # Spend is a SUM, not a rate, so an absolute target is only meaningful at the
+    # scope it was written for. Expressed against the baseline it holds anywhere.
+    horizon_weeks: 1
+    action: Rebalance {scope} spend from {current} to {target}, shifting the entry-price
+      push toward full-margin lines
+    monitoring:
+      metrics: [aov, units_per_order, net_revenue]
+      cadence: daily
+      horizon_days: 10
+      guardrail: halt if sessions fall more than 5% week-on-week
+
+  fill_rate:
+    label: Stock availability
+    owner_role: supply_planner
+    decision_rights: expedite freight above 10k requires supply chain director
+    scope: inherit                   # the stockout is at one SKU in one region
+    target: 0.97                     # a RATE
+    horizon_weeks: 3
+    action: Expedite replenishment for {scope}, restoring fill rate from {current}
+      to {target}
+    monitoring:
+      metrics: [fill_rate, units, days_of_cover]
+      cadence: daily
+      horizon_days: 21
+      guardrail: source is 2 days stale — confirm against the WMS before committing freight
+
+  # Not a lever. There is nothing to pull, because the driver is not measured.
+  # The action is to start measuring it, and the payoff is the confidence gained
+  # rather than revenue recovered.
+  competitor_price_index:
+    label: Competitor price feed
+    owner_role: pricing_council
+    decision_rights: procurement approval for a third-party feed
+    kind: instrumentation
+    scope: portfolio
+    horizon_weeks: 6
+    action: Commission a competitor price feed for {scope} so this divergence can be
+      attributed rather than merely located
+    monitoring:
+      metrics: [conversion_rate, competitor_price_index]
+      cadence: weekly
+      horizon_days: 90
+      guardrail: re-run the control-group estimate once eight weeks of feed exist
 
 # --------------------------------------------------------------- personas --
 

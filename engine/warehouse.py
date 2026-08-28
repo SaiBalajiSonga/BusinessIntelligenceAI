@@ -195,6 +195,27 @@ def view_named(name: str) -> str:
     return VIEWS[name]
 
 
+# Which dimensions each view can actually be sliced by. A scope discovered on
+# one view (the drill works at SKU grain) is not automatically valid on another
+# — marketing spend has no SKU, and asking for one is a binder error rather
+# than an empty result.
+VIEW_DIMENSIONS = {
+    "week_rcs": {"region", "channel", "category", "sku"},
+    "week_rc": {"region", "channel"},
+    "week_inventory": {"region", "sku"},
+    "week_marketing": {"region", "channel", "campaign"},
+}
+
+
+def narrow_scope(view_name: str, scope: dict | None) -> dict | None:
+    """Keep only the parts of a scope this view can honour."""
+    if not scope:
+        return None
+    allowed = VIEW_DIMENSIONS.get(view_name, set())
+    kept = {k: v for k, v in scope.items() if k in allowed}
+    return kept or None
+
+
 # ------------------------------------------------------------- series SQL --
 
 def where_clause(filters: dict | None) -> str:
