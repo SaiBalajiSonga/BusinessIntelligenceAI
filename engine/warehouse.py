@@ -86,7 +86,8 @@ def _build(con: duckdb.DuckDBPyConnection, contract: Contract) -> None:
     ]:
         path = ROOT / src[name]["path"]
         if not path.exists():
-            raise FileNotFoundError(f"{path} missing — run `python data/generate.py` first")
+            import data.generate
+            data.generate.main()
         con.execute(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM read_parquet('{path}')")
 
     # --- weekly sales at full grain: region x channel x category x sku -----
