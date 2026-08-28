@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
-import FeedbackModal from "../components/FeedbackModal";
+import InlineFeedback from "../components/InlineFeedback";
 import type { Insight, Narrative } from "../types";
 
 interface Props { week: string; persona: string; hideHeader?: boolean; }
@@ -16,8 +16,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
   const [insight, setInsight] = useState<Insight | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [fbOpen, setFbOpen] = useState(false);
-
+  
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -75,7 +74,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 18,
             }}>
-              {persona === "cfo" ? "👔" : persona === "eu_category_manager" ? "🗂️" : "📈"}
+              {persona === "cfo" ? "??" : persona === "eu_category_manager" ? "???" : "??"}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
@@ -163,28 +162,14 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
             <div className="card-title" style={{ marginBottom: 12 }}>🧠 Analyst Feedback</div>
             <p className="note" style={{ marginBottom: 14 }}>
               Your feedback updates driver priors via isotonic calibration.
-              Structured verdicts teach the engine — a thumbs-down alone teaches nothing.
             </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                className="btn btn-confirm"
-                onClick={() => setFbOpen(true)}
-              >
-                ✓ Correct — Confirm Narrative
-              </button>
-              <button
-                className="btn btn-danger"
-                onClick={() => setFbOpen(true)}
-              >
-                ✗ Wrong Driver
-              </button>
-              <button
-                className="btn"
-                onClick={() => setFbOpen(true)}
-              >
-                📌 Known Cause
-              </button>
-            </div>
+            <InlineFeedback
+              week={week}
+              persona={persona}
+              kpi={insight.kpi}
+              confidence={insight.confidence.score}
+              impact={insight.gap ?? undefined}
+            />
           </div>
         </div>
 
@@ -275,15 +260,6 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
           )}
         </div>
       </div>
-
-      <FeedbackModal
-        open={fbOpen}
-        onClose={() => setFbOpen(false)}
-        week={week}
-        persona={persona}
-        confidence={insight.confidence.score}
-        impact={insight.gap ?? undefined}
-      />
     </div>
   );
 }

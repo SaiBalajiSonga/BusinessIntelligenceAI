@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import { Bridge, ConfidenceBars, SplitBar } from "../charts";
-import FeedbackModal from "../components/FeedbackModal";
+import InlineFeedback from "../components/InlineFeedback";
 import type { Actions, Attribution, Cause, Insight, Split } from "../types";
 
 interface Props {
@@ -84,9 +84,7 @@ export default function RootCause({ week, persona, onWeekChange, onPersonaChange
   const [attribution, setAttribution] = useState<Attribution | null>(null);
   const [split, setSplit] = useState<Split | null>(null);
   const [selected, setSelected] = useState<Cause | null>(null);
-  const [fbOpen, setFbOpen] = useState(false);
-  const [fbTarget, setFbTarget] = useState<Cause | null>(null);
-  const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const scenario = SCENARIOS.find((s) => s.id === activeScenario) ?? SCENARIOS[0];
@@ -444,40 +442,19 @@ export default function RootCause({ week, persona, onWeekChange, onPersonaChange
               </ul>
 
               <div className="section-label">Analyst Feedback</div>
-              <div className="feedback-btns">
-                <button className="btn btn-sm btn-confirm" onClick={() => {
-                  setFbTarget(selected);
-                  setFbOpen(true);
-                }}>
-                  ✓ Confirm Driver
-                </button>
-                <button className="btn btn-sm btn-danger" onClick={() => {
-                  setFbTarget(selected);
-                  setFbOpen(true);
-                }}>
-                  ✗ Flag Wrong Driver
-                </button>
-                <button className="btn btn-sm" onClick={() => {
-                  setFbTarget(selected);
-                  setFbOpen(true);
-                }}>
-                  📌 Mark Known Cause
-                </button>
-              </div>
+              <InlineFeedback
+                week={activeWeek}
+                persona={activePersona}
+                driver={selected.factor}
+                confidence={insight?.confidence.score}
+                impact={selected.amount}
+              />
             </div>
           </>
         )}
       </aside>
 
-      <FeedbackModal
-        open={fbOpen}
-        onClose={() => setFbOpen(false)}
-        week={activeWeek}
-        persona={activePersona}
-        driver={fbTarget?.factor}
-        confidence={insight?.confidence.score}
-        impact={fbTarget?.amount}
-      />
+      
     </div>
   );
 }
