@@ -10,3 +10,6 @@ warehouse/*.duckdb
 .env
 
 warehouse/llm_cache.json
+
+web/node_modules/
+web/dist/
