@@ -103,7 +103,8 @@ export default function FeedbackHub({ week, persona }: Props) {
                 <dd>{learning.feedback_count ?? total}</dd>
                 <dt>Calibration adjustment</dt>
                 <dd style={{ fontFamily: "monospace", color: "var(--brand)" }}>
-                  {learning.confidence_adjustment > 0 ? "+" : ""}{learning.confidence_adjustment?.toFixed(3) ?? "0.000"}
+                  {learning.confidence_adjustment?.shifted_by > 0 ? "+" : ""}
+                  {learning.confidence_adjustment?.shifted_by?.toFixed(3) ?? "0.000"}
                 </dd>
               </dl>
               <div style={{

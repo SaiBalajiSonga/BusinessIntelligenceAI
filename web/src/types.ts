@@ -190,7 +190,13 @@ export interface Learning {
   backend: string;
   feedback_count: number;
   calibration_adjustment: number;
-  confidence_adjustment: number;
+  confidence_adjustment: {
+    raw: number;
+    calibrated: number;
+    shifted_by: number;
+    basis: string;
+    n: number;
+  };
   driver_priors?: Record<string, number>;
 }
 
