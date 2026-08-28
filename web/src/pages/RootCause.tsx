@@ -1,3 +1,4 @@
+import Loader from "../components/Loader";
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import { Bridge, ConfidenceBars, SplitBar } from "../charts";
@@ -169,10 +170,7 @@ export default function RootCause({ week, persona, onWeekChange, onPersonaChange
       )}
 
       {loading && (
-        <div className="loading-screen">
-          <div className="spinner" />
-          <div className="loading-text">Running analysis cascade (Rungs 0–5)…</div>
-        </div>
+        <Loader text="Running analysis cascade (Rungs 0-5)..." />
       )}
 
       {error && <div className="error-banner">⚠️ {error}</div>}

@@ -1,3 +1,4 @@
+import Loader from "../components/Loader";
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import InlineFeedback from "../components/InlineFeedback";
@@ -27,10 +28,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
   }, [week, persona]);
 
   if (loading) return (
-    <div className="loading-screen">
-      <div className="spinner" />
-      <div className="loading-text">Generating persona-specific narrative…</div>
-    </div>
+    <Loader text="Generating persona-specific narrative..." />
   );
   if (error) return <div className="error-banner">⚠️ {error}</div>;
   if (!narrative || !insight) return null;

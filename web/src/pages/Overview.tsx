@@ -1,3 +1,4 @@
+import Loader from "../components/Loader";
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import type { Freshness, Movement, Telemetry } from "../types";
@@ -32,10 +33,7 @@ export default function Overview({ week, persona }: Props) {
   }, [week, persona]);
 
   if (loading) return (
-    <div className="loading-screen">
-      <div className="spinner" />
-      <div className="loading-text">Computing KPI movements across all sources…</div>
-    </div>
+    <Loader text="Computing KPI movements across all sources..." />
   );
 
   if (error) return (

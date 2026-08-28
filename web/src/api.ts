@@ -5,14 +5,27 @@ import type {
 
 const BASE = "/v1";
 
+const cache = new Map<string, { data: any, time: number }>();
+const CACHE_TTL = 30000;
+
 async function get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${BASE}/${path}${qs ? `?${qs}` : ""}`);
+  const url = `${BASE}/${path}${qs ? `?${qs}` : ""}`;
+  
+  const cached = cache.get(url);
+  if (cached && Date.now() - cached.time < CACHE_TTL) {
+    return cached.data as T;
+  }
+  
+  const res = await fetch(url);
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail.detail ?? `${path} failed (${res.status})`);
   }
-  return res.json() as Promise<T>;
+  
+  const data = await res.json();
+  cache.set(url, { data, time: Date.now() });
+  return data as T;
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -55,6 +68,7 @@ export const api = {
   addAnnotation: (body: AnnotationIn) =>
     post<{ id: string; recorded: boolean }>("annotations", body),
   learning: (week: string, persona: string) => get<Learning>("learning", { week, persona }),
+  testIntegration: (body: any) => post<any>("integrations/test", body),
 };
 
 export const fmt = {

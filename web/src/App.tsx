@@ -16,6 +16,7 @@ const NAV = [
   { to: "/", label: "Dashboard" },
   { to: "/investigation", label: "KPI Investigation" },
   { to: "/system", label: "System & Learning" },
+  { to: "/integrations", label: "Data Connections" },
 ];
 
 function TopNav({
