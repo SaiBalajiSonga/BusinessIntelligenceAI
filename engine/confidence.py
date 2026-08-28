@@ -89,10 +89,16 @@ def driver_moved(
     actual = float(values[idx])
     rel = (actual - expected) / abs(expected)
     where = f" in {'/'.join(str(v) for v in filters.values())}" if filters else ""
+
+    def fmt(v: float) -> str:
+        # never scientific notation — a language model quotes these strings back
+        # verbatim, and "3.31e+05" is not a figure any reader can check
+        return f"{v:,.0f}" if abs(v) >= 1000 else f"{v:.4f}"
+
     return (
         abs(rel) >= min_rel,
         rel,
-        f"{spec['label']}{where} {actual:,.4g} vs {expected:,.4g} expected ({rel:+.0%})",
+        f"{spec['label']}{where} {fmt(actual)} vs {fmt(expected)} expected ({rel:+.0%})",
     )
 
 

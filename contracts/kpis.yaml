@@ -198,6 +198,35 @@ kpis:
     materiality: {min_abs_delta: 0.010, min_z: 2.5}
     baseline: {method: stl, period_weeks: 52, min_history_weeks: 104, fallback: peer_benchmark}
 
+# -------------------------------------------------------------------- LLM --
+# The only external service the engine calls, and the only stage that is not
+# deterministic. It renders an evidence object into prose. It never computes.
+
+llm:
+  max_output_tokens: 500
+  temperature: 0.3
+  retry_on_validation_failure: 1     # regenerate once, then fall back to template
+
+  cache:
+    enabled: true
+    path: warehouse/llm_cache.json
+    note: >
+      Keyed on the evidence object, so the same finding never costs twice. On a
+      free tier this is what stops a live demo dying on a rate limit.
+
+  reference_pricing_usd_per_mtok:
+    input: 0.30
+    output: 0.60
+    note: >
+      Illustrative mid-market rates, NOT what we pay — the free tier costs
+      nothing. These exist so the economics panel can show what this workload
+      would cost a paying enterprise, which is the question the brief asks.
+
+  validator:
+    relative_tolerance: 0.005        # allow rounding, not invention
+    allow_small_integers_up_to: 20   # "two drivers", "3 regions" are prose, not claims
+    allow_years: [2000, 2100]
+
 # ---------------------------------------------------------- decomposition --
 #
 # The exact multiplicative identity behind Net Revenue. LMDI (Rung 1) splits a

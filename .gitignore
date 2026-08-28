@@ -8,3 +8,5 @@ warehouse/*.duckdb
 
 .DS_Store
 .env
+
+warehouse/llm_cache.json
