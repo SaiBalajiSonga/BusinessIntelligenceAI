@@ -36,6 +36,22 @@ attribution:
   max_depth: 3
   top_n: 5
 
+# Rung 4. The first rung that can be wrong, so its guard rail is explicit.
+causal:
+  method: difference_in_differences
+  specification: two_way_fixed_effects
+  pre_window_weeks: 26
+  parallel_trends:
+    max_contamination: 0.20
+    note: >
+      A pre-trend is judged by how much of the estimated effect it could account
+      for if extrapolated across the post window — not by its p-value. With
+      enough observations an arbitrarily small pre-trend becomes statistically
+      significant while remaining irrelevant to the estimate; on our own data
+      the same pre-trend tests at p=0.33 or p=0.015 depending only on how many
+      weeks are included. Contamination is the quantity that actually threatens
+      the conclusion, so that is what gates it. The p-value is still reported.
+
 # ---------------------------------------------------------------- sources --
 
 sources:
