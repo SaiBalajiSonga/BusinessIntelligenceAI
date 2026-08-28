@@ -59,8 +59,8 @@
 
   /* Geometry */
   --radius-sm:      6px;
-  --radius:         12px;
-  --radius-lg:      16px;
+  --radius:         6px;
+  --radius-lg:      8px;
 
   /* Layout */
   --sidebar-w:      260px;
@@ -71,46 +71,46 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Sleek SaaS dark mode (Vercel/Linear style) */
-  --page:           #000000;
-  --surface:        #09090b;
-  --surface-2:      #18181b;
-  --surface-3:      #27272a;
-  --surface-hover:  #18181b;
+  /* Sleek SaaS dark mode (GitHub / Supabase inspired) */
+  --page:           #0d1117;
+  --surface:        #161b22;
+  --surface-2:      #21262d;
+  --surface-3:      #30363d;
+  --surface-hover:  #21262d;
 
-  --ink:            #fafafa;
-  --ink-2:          #a1a1aa;
-  --muted:          #71717a;
+  --ink:            #c9d1d9;
+  --ink-2:          #8b949e;
+  --muted:          #6e7681;
 
-  --border:         #27272a;
-  --border-strong:  #3f3f46;
-  --hairline:       #18181b;
+  --border:         #30363d;
+  --border-strong:  #484f58;
+  --hairline:       #21262d;
 
-  --brand:          #ffffff;
-  --brand-dim:      #a1a1aa;
-  --brand-subtle:   #18181b;
-  --brand-text:     #fafafa;
+  --brand:          #58a6ff;
+  --brand-dim:      #388bfd;
+  --brand-subtle:   rgba(56, 139, 253, 0.1);
+  --brand-text:     #79c0ff;
 
-  --confident:      #10b981;
-  --confident-bg:   rgba(16, 185, 129, 0.1);
-  --qualified:      #f59e0b;
-  --qualified-bg:   rgba(245, 158, 11, 0.1);
-  --abstain:        #ef4444;
-  --abstain-bg:     rgba(239, 68, 68, 0.1);
+  --confident:      #3fb950;
+  --confident-bg:   rgba(46, 160, 67, 0.15);
+  --qualified:      #d29922;
+  --qualified-bg:   rgba(187, 128, 9, 0.15);
+  --abstain:        #f85149;
+  --abstain-bg:     rgba(248, 81, 73, 0.1);
 
-  --good:           #10b981;
-  --warning:        #f59e0b;
-  --critical:       #ef4444;
+  --good:           #3fb950;
+  --warning:        #d29922;
+  --critical:       #f85149;
 
-  --pos:            #10b981;
-  --pos-bg:         rgba(16, 185, 129, 0.1);
-  --neg:            #ef4444;
-  --neg-bg:         rgba(239, 68, 68, 0.1);
+  --pos:            #3fb950;
+  --pos-bg:         rgba(46, 160, 67, 0.15);
+  --neg:            #f85149;
+  --neg-bg:         rgba(248, 81, 73, 0.15);
 
-  --shadow-sm:      0 1px 2px rgba(0,0,0,0.8);
-  --shadow:         0 4px 12px rgba(0,0,0,0.5);
-  --shadow-md:      0 8px 24px rgba(0,0,0,0.6);
-  --shadow-ring:    0 0 0 1px rgba(255, 255, 255, 0.2);
+  --shadow-sm:      0 0 0 1px var(--border);
+  --shadow:         0 3px 6px rgba(1, 4, 9, 0.8), 0 0 0 1px var(--border);
+  --shadow-md:      0 8px 24px rgba(1, 4, 9, 1), 0 0 0 1px var(--border);
+  --shadow-ring:    0 0 0 3px rgba(88, 166, 255, 0.3);
 }
 
 /* ---------------------------------------------------- Reset -- */
@@ -356,8 +356,8 @@ kbd {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 32px;
-  box-shadow: var(--shadow);
+  padding: 24px;
+  box-shadow: none;
 }
 
 .card-header {
@@ -387,7 +387,7 @@ kbd {
 .tiles-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
+  gap: 16px;
   margin-bottom: 32px;
 }
 
@@ -397,11 +397,11 @@ kbd {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 24px;
-  box-shadow: var(--shadow);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: 20px;
+  box-shadow: none;
+  transition: border-color 0.2s ease;
 }
-.kpi-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.kpi-tile:hover { border-color: var(--border-strong); }
 
 .kpi-tile.material {
   border-color: var(--neg);
@@ -636,7 +636,7 @@ kbd {
   width: 100%;
 }
 
-.scenario-card:hover { border-color: var(--brand-dim); box-shadow: var(--shadow); transform: translateY(-2px); }
+.scenario-card:hover { border-color: var(--brand-dim); box-shadow: none; transform: translateY(-2px); }
 
 .scenario-card.active {
   border-color: var(--brand);
@@ -698,7 +698,7 @@ kbd {
   border: 1px solid var(--border);
   background: var(--surface);
   overflow: hidden;
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 
 .action-card-header {
