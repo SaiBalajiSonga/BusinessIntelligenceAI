@@ -232,6 +232,35 @@ class SupabaseStore:
         r.raise_for_status()
         return r.json()
 
+    def health(self) -> None:
+        """
+        Prove the store can actually be WRITTEN, not merely reached.
+
+        Row-level security makes a denied read indistinguishable from an empty
+        table: PostgREST returns HTTP 200 and an empty array either way. A
+        reachability check therefore passes against a database the engine cannot
+        read a single row from or write a single row to, and the feedback loop
+        silently does nothing. Attempting a real upsert is the only check that
+        tells the truth.
+        """
+        # on_conflict names the constraint columns. Without it PostgREST
+        # infers the conflict target from the PRIMARY KEY — here a fresh uuid —
+        # so the "upsert" is a plain insert that collides with unique(kind,key)
+        # and 409s on every run after the first.
+        r = self.client.post(
+            f"{self.base}/learned_params",
+            params={"on_conflict": "kind,key"},
+            json={"kind": "calibration", "key": "__writable_probe__",
+                  "value": {"ok": True}, "n_observations": 0},
+            headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+        )
+        if r.status_code >= 300:
+            raise RuntimeError(
+                f"supabase reachable but not writable ({r.status_code}). "
+                f"Apply feedback/schema.sql, then feedback/schema_demo_policies.sql "
+                f"if you are using the publishable key."
+            )
+
     def record_insight(self, row: dict[str, Any]) -> str:
         return self._post("insight_audit", row)
 
@@ -257,8 +286,9 @@ class SupabaseStore:
     def save_param(self, kind: str, key: str, value: dict, n: int) -> None:
         self.client.post(
             f"{self.base}/learned_params",
+            params={"on_conflict": "kind,key"},
             json={"kind": kind, "key": key, "value": value, "n_observations": n},
-            headers={"Prefer": "resolution=merge-duplicates"},
+            headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
         ).raise_for_status()
 
     def params(self, kind: str) -> dict[str, dict]:
@@ -283,10 +313,10 @@ def open_store(con=None) -> Store:
     if url and key:
         try:
             store = SupabaseStore(url, key)
-            store._get("learned_params", {"limit": "1"})     # prove the tables exist
+            store.health()
             return store
         except Exception:
-            pass        # schema not applied, or offline — local store still works
+            pass        # not applied, not writable, or offline — local still works
 
     if con is None:
         import duckdb
