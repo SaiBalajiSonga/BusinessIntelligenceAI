@@ -9,6 +9,7 @@ interface Props {
   persona: string;
   onWeekChange?: (w: string) => void;
   onPersonaChange?: (p: string) => void;
+  hideHeader?: boolean;
 }
 
 const WEIGHTS: Record<string, number> = {
@@ -76,7 +77,7 @@ const RUNG_METHODS: Record<number, string> = {
   4: "Rung 4 — Difference-in-differences with two-way fixed effects. Carries assumptions.",
 };
 
-export default function RootCause({ week, persona, onWeekChange, onPersonaChange }: Props) {
+export default function RootCause({ week, persona, onWeekChange, onPersonaChange, hideHeader }: Props) {
   const [activeScenario, setActiveScenario] = useState("multifactor");
   const [insight, setInsight] = useState<Insight | null>(null);
   const [actions, setActions] = useState<Actions | null>(null);
@@ -117,55 +118,57 @@ export default function RootCause({ week, persona, onWeekChange, onPersonaChange
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Root Cause Workspace</h1>
-        <p className="page-sub">
-          Deterministic decomposition · Jensen-Shannon surprise ranking · Causal inference
-        </p>
-      </div>
+      {!hideHeader && (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Root Cause Workspace</h1>
+            <p className="page-sub">
+              Deterministic decomposition · Jensen-Shannon surprise ranking · Causal inference
+            </p>
+          </div>
 
-      {/* Scenario Switcher */}
-      <div className="scenario-grid">
-        {SCENARIOS.map((s) => (
-          <button
-            key={s.id}
-            className={`scenario-card${activeScenario === s.id ? " active" : ""}`}
-            onClick={() => setActiveScenario(s.id)}
-          >
-            <span className="scenario-card-icon">{s.icon}</span>
-            <div className="scenario-card-title">{s.title}</div>
-            <div className="scenario-card-sub">{s.sub}</div>
-            <span
-              className="scenario-badge"
-              style={{ background: `${s.badgeColor}20`, color: s.badgeColor, border: `1px solid ${s.badgeColor}40` }}
-            >
-              {s.badge}
+          <div className="scenario-grid">
+            {SCENARIOS.map((s) => (
+              <button
+                key={s.id}
+                className={`scenario-card${activeScenario === s.id ? " active" : ""}`}
+                onClick={() => setActiveScenario(s.id)}
+              >
+                <span className="scenario-card-icon">{s.icon}</span>
+                <div className="scenario-card-title">{s.title}</div>
+                <div className="scenario-card-sub">{s.sub}</div>
+                <span
+                  className="scenario-badge"
+                  style={{ background: `${s.badgeColor}20`, color: s.badgeColor, border: `1px solid ${s.badgeColor}40` }}
+                >
+                  {s.badge}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{
+            padding: "12px 16px",
+            background: "var(--brand-subtle)",
+            border: "1px solid var(--brand)",
+            borderRadius: "var(--radius)",
+            marginBottom: 20,
+            fontSize: 13,
+            color: "var(--ink-2)",
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ️</span>
+            <span>
+              <strong style={{ color: "var(--ink)" }}>{scenario.title}:</strong> {scenario.desc}
+              {" "}<span style={{ color: "var(--muted)" }}>
+                Persona: <code>{activePersona}</code> · Week: <code>{activeWeek}</code>
+              </span>
             </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Scenario Description */}
-      <div style={{
-        padding: "12px 16px",
-        background: "var(--brand-subtle)",
-        border: "1px solid var(--brand)",
-        borderRadius: "var(--radius)",
-        marginBottom: 20,
-        fontSize: 13,
-        color: "var(--ink-2)",
-        display: "flex",
-        gap: 10,
-        alignItems: "flex-start",
-      }}>
-        <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ️</span>
-        <span>
-          <strong style={{ color: "var(--ink)" }}>{scenario.title}:</strong> {scenario.desc}
-          {" "}<span style={{ color: "var(--muted)" }}>
-            Persona: <code>{activePersona}</code> · Week: <code>{activeWeek}</code>
-          </span>
-        </span>
-      </div>
+          </div>
+        </>
+      )}
 
       {loading && (
         <div className="loading-screen">

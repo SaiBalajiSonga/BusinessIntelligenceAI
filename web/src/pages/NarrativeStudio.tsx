@@ -3,7 +3,7 @@ import { api, fmt } from "../api";
 import FeedbackModal from "../components/FeedbackModal";
 import type { Insight, Narrative } from "../types";
 
-interface Props { week: string; persona: string; }
+interface Props { week: string; persona: string; hideHeader?: boolean; }
 
 const BAND_STYLE: Record<string, { badge: string; icon: string; label: string }> = {
   confident: { badge: "badge-confident", icon: "✅", label: "High Confidence" },
@@ -11,7 +11,7 @@ const BAND_STYLE: Record<string, { badge: string; icon: string; label: string }>
   abstain:    { badge: "badge-abstain",    icon: "🛑", label: "Engine Abstained" },
 };
 
-export default function NarrativeStudio({ week, persona }: Props) {
+export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
   const [narrative, setNarrative] = useState<Narrative | null>(null);
   const [insight, setInsight] = useState<Insight | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,12 +44,14 @@ export default function NarrativeStudio({ week, persona }: Props) {
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Narrative Studio</h1>
-        <p className="page-sub">
-          Persona-specific synthesis · Numeric validator · Guard report · Analyst feedback loop
-        </p>
-      </div>
+      {!hideHeader && (
+        <div className="page-header">
+          <h1 className="page-title">Narrative Studio</h1>
+          <p className="page-sub">
+            Persona-specific synthesis · Numeric validator · Guard report · Analyst feedback loop
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-2-1" style={{ gap: 20 }}>
         {/* Left: Narrative */}

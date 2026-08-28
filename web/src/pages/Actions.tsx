@@ -194,7 +194,13 @@ function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; pe
   );
 }
 
-export default function ActionPlaybook({ week, persona }: Props) {
+interface Props {
+  week: string;
+  persona: string;
+  hideHeader?: boolean;
+}
+
+export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
   const [actions, setActions] = useState<Actions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -219,12 +225,14 @@ export default function ActionPlaybook({ week, persona }: Props) {
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Action Playbook</h1>
-        <p className="page-sub">
-          Driver → Lever → Action → Expected Impact → Owner → Confidence → Monitoring
-        </p>
-      </div>
+      {!hideHeader && (
+        <div className="page-header">
+          <h1 className="page-title">Action Playbook</h1>
+          <p className="page-sub">
+            Recommended mitigations · Expected impact bounds · Guardrails · Decision rights
+          </p>
+        </div>
+      )}
 
       {/* Recovery Summary */}
       <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 24 }}>

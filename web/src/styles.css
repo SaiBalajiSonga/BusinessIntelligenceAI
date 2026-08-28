@@ -266,21 +266,11 @@ body {
 /* -------------------------------------------- Top Bar -- */
 
 .topbar {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: var(--sidebar-w);
-  right: 0;
-  height: var(--topbar-h);
   background: var(--page);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 40px;
   z-index: 90;
-  transition: left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-
-.topbar.collapsed { left: var(--sidebar-w-collapsed); }
 
 .topbar-title {
   font-size: 16px;
@@ -333,17 +323,10 @@ kbd {
 /* -------------------------------------------- Main Content -- */
 
 .main-content {
-  margin-left: var(--sidebar-w);
-  margin-top: var(--topbar-h);
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 40px 48px 80px;
-  transition: margin-left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-  min-height: calc(100vh - var(--topbar-h));
 }
-
-.main-content.collapsed { margin-left: var(--sidebar-w-collapsed); }
 
 /* ============================================================
    COMPONENT LIBRARY
