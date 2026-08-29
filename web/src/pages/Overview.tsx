@@ -112,8 +112,8 @@ export default function Overview({ week, persona }: Props) {
                 <span style={{ color: "var(--muted)", fontSize: 11 }}>vs expected</span>
               </div>
               <div className="kpi-tile-foot">
-                <span className="has-tooltip" data-tooltip="Z-score: Number of standard deviations away from the historical baseline">
-                  Z = {m.z.toFixed(2)}
+                <span className="has-tooltip" data-tooltip="Anomaly Score: How unusual this movement is compared to historical patterns (Z-score)">
+                  Anomaly: {m.z.toFixed(2)}
                 </span> · {m.history_weeks}w history · {m.baseline_method}
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function Overview({ week, persona }: Props) {
         <div className="card">
           <div className="card-header">
             <div>
-              <div className="card-title">Data Source Freshness</div>
+              <div className="card-title">Data Quality & SLA Compliance</div>
               <div className="card-sub">SLA compliance across all ingestion pipelines</div>
             </div>
           </div>
@@ -175,7 +175,7 @@ export default function Overview({ week, persona }: Props) {
           <div className="card">
             <div className="card-header">
               <div>
-                <div className="card-title">Runtime Economics</div>
+                <div className="card-title">System Diagnostics (Admin)</div>
                 <div className="card-sub">{telemetry.llm.provider} · {telemetry.llm.model}</div>
               </div>
               <span className="badge badge-neutral">
@@ -229,7 +229,7 @@ export default function Overview({ week, persona }: Props) {
                 <th>Actual</th>
                 <th>Expected</th>
                 <th>Delta</th>
-                <th>Z-score</th>
+                <th>Anomaly Score</th>
                 <th>Reason</th>
               </tr>
             </thead>

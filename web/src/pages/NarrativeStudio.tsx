@@ -175,7 +175,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
         <div className="grid" style={{ gap: 16, alignContent: "start" }}>
           {/* Guard report */}
           <div className="card">
-            <div className="card-title" style={{ marginBottom: 12 }}>🛡️ Numeric Guard Report</div>
+            <div className="card-title" style={{ marginBottom: 12 }}>🛡️ Data Verification Check</div>
             <dl className="kv-grid" style={{ marginBottom: narrative.guard.report !== "not applicable" ? 16 : 0 }}>
               <dt>Status</dt>
               <dd>

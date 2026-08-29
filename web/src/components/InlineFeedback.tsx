@@ -91,8 +91,8 @@ export default function InlineFeedback({
         >
           <ThumbsUp 
             size={16} 
-            strokeWidth={state === "liked" ? 2.5 : 2} 
-            fill={state === "liked" ? "currentColor" : "none"} 
+            strokeWidth={2} 
+             
           />
         </button>
         <div style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
@@ -103,8 +103,8 @@ export default function InlineFeedback({
         >
           <ThumbsDown 
             size={16} 
-            strokeWidth={state === "disliked" || state === "disliking" ? 2.5 : 2} 
-            fill={state === "disliked" || state === "disliking" ? "currentColor" : "none"} 
+            strokeWidth={2} 
+             
           />
         </button>
       </div>

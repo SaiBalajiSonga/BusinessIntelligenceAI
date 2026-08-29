@@ -35,7 +35,7 @@ const SCENARIOS = [
     badgeColor: "var(--neg)",
     week: "2026-W32",
     persona: "cfo",
-    desc: "Net Revenue dropped £612k vs expectation. LMDI decomposes it into four interacting drivers — none alone explains the gap.",
+    desc: "Net Revenue dropped £612k vs expectation. Advanced analytics isolates the impact of four interacting drivers — none alone explains the gap.",
   },
   {
     id: "sparse",
@@ -57,7 +57,7 @@ const SCENARIOS = [
     badgeColor: "var(--abstain)",
     week: "2026-W32",
     persona: "analyst",
-    desc: "When contradiction score or coverage is below threshold, the engine refuses to narrate and instead lists what would raise confidence.",
+    desc: "When data signals are contradictory or missing, the engine refuses to narrate and instead lists what would raise confidence.",
   },
   {
     id: "entitlement",
@@ -171,7 +171,7 @@ export default function RootCause({ week, persona, onWeekChange, onPersonaChange
       )}
 
       {loading && (
-        <Loader text="Running analysis cascade (Rungs 0-5)..." />
+        <Loader text="Running Diagnostic Engine..." />
       )}
 
       {error && <div className="error-banner">⚠️ {error}</div>}
