@@ -54,7 +54,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
       <div className="grid grid-2-1" style={{ gap: 20 }}>
         {/* Left: Unified Narrative Card */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 16 }}>
+          <div className="card" style={{ padding: 0, marginBottom: 16 }}>
             {/* Header: Persona */}
             <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--page)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -134,7 +134,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
             </div>
 
             {/* Footer: Analyst Feedback */}
-            <div style={{ padding: "16px 20px", background: "var(--surface-2)", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ padding: "16px 20px", background: "var(--surface-2)", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottomLeftRadius: "var(--radius)", borderBottomRightRadius: "var(--radius)" }}>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>
                 Did this narrative help you make a decision?
               </div>

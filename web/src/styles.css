@@ -1397,3 +1397,9 @@ figure { margin: 0; }
   border-color: var(--brand);
   color: var(--brand);
 }
+
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

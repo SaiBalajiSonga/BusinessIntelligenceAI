@@ -79,7 +79,7 @@ export default function InlineFeedback({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-end", position: "relative" }}>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
         <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 8, opacity: (state === "idle" || state === "disliking") ? 1 : 0, transition: "opacity 0.2s" }}>
           Is this accurate?
@@ -111,14 +111,18 @@ export default function InlineFeedback({
 
       {state === "disliking" && (
         <div style={{ 
+          position: "absolute",
+          bottom: "100%",
+          right: 0,
+          marginBottom: 12,
+          zIndex: 50,
           background: "var(--surface)", 
           border: "1px solid var(--border)", 
           borderRadius: "var(--radius-lg)", 
           padding: "16px",
-          width: "100%",
-          maxWidth: 420,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          animation: "slideDown 0.2s ease-out"
+          width: 320,
+          boxShadow: "0 12px 24px rgba(0,0,0,0.15)",
+          animation: "slideUp 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
         }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
             What was wrong?
