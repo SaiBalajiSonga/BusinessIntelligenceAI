@@ -1,8 +1,8 @@
 import Loader from "../components/Loader";
 import { useEffect, useState } from "react";
-import { api, fmt } from "../api";
+import { api } from "../api";
 import InlineFeedback from "../components/InlineFeedback";
-import { ShieldCheck, ShieldAlert, AlertTriangle, Cpu, HelpCircle, Bot } from "lucide-react";
+import { ShieldAlert, AlertTriangle, HelpCircle, Bot } from "lucide-react";
 import type { Insight, Narrative } from "../types";
 
 interface Props { week: string; persona: string; hideHeader?: boolean; }
@@ -36,9 +36,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
 
   const band = narrative.band;
   const bs = BAND_STYLE[band] ?? BAND_STYLE.qualified;
-  const totalTokens = narrative.calls.reduce((s, c) => s + c.input_tokens + c.output_tokens, 0);
-  const totalCost = narrative.calls.reduce((s, c) => s + c.cost_usd, 0);
-  const totalLatency = narrative.calls.reduce((s, c) => s + c.latency_ms, 0);
+
 
   return (
     <div>
@@ -51,7 +49,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
         </div>
       )}
 
-      <div className="grid grid-2-1" style={{ gap: 20 }}>
+      <div style={{ maxWidth: 840, margin: "0 auto" }}>
         {/* Left: Unified Narrative Card */}
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div className="card" style={{ padding: 0, marginBottom: 16 }}>
@@ -111,6 +109,18 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
                 </div>
               )}
 
+              
+              {insight.would_raise_confidence.length > 0 && (
+                <div style={{ marginTop: 24, padding: "16px", background: "rgba(245, 158, 11, 0.05)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "var(--radius-sm)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--warning)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <HelpCircle size={14} /> What would raise engine confidence?
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
+                    {insight.would_raise_confidence.map((m) => <li key={m}>{m}</li>)}
+                  </ul>
+                </div>
+              )}
+              
               {/* Guard badges */}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border-light)" }}>
                 <span className="pill">
@@ -149,93 +159,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
           </div>
         </div>
 
-        {/* Right: Guard report + LLM stats */}
-        <div className="grid" style={{ gap: 16, alignContent: "start" }}>
-          {/* Guard report */}
-          <div className="card">
-            <div className="card-title" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><ShieldCheck size={16} /> Data Verification Check</div>
-            <dl className="kv-grid" style={{ marginBottom: narrative.guard.report !== "not applicable" ? 16 : 0 }}>
-              <dt>Status</dt>
-              <dd>
-                <span className={`badge ${narrative.guard.passed ? "badge-confident" : "badge-abstain"}`}>
-                  {narrative.guard.passed ? "Passed" : "Failed"}
-                </span>
-              </dd>
-              <dt>Figures checked</dt>
-              <dd>{narrative.guard.figures_checked}</dd>
-              <dt>Drafts rejected</dt>
-              <dd>{narrative.guard.drafts_rejected}</dd>
-              <dt>Violations caught</dt>
-              <dd>{narrative.guard.violations.length}</dd>
-            </dl>
-            {narrative.guard.violations.length > 0 && (
-              <>
-                <div className="section-label">Violations (hallucinated numbers)</div>
-                <div className="evidence-block">
-                  {narrative.guard.violations.join("\n")}
-                </div>
-              </>
-            )}
-            {narrative.guard.report !== "not applicable" && (
-              <>
-                <div className="section-label" style={{ marginTop: 14 }}>Full Report</div>
-                <div className="evidence-block" style={{ fontSize: 11 }}>
-                  {narrative.guard.report}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* LLM calls */}
-          {narrative.calls.length > 0 && (
-            <div className="card">
-              <div className="card-title" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Cpu size={16} /> System Diagnostics (LLM)</div>
-              {narrative.calls.map((c, i) => (
-                <div key={i} style={{
-                  padding: "10px 12px",
-                  background: "var(--surface-2)",
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border)",
-                  marginBottom: 8,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--ink)" }}>
-                      Attempt {c.attempt + 1}
-                    </span>
-                    {c.cached && <span className="badge badge-neutral" style={{ fontSize: 10 }}>cached</span>}
-                  </div>
-                  <dl className="kv-grid" style={{ fontSize: 12 }}>
-                    <dt>Model</dt><dd style={{ fontFamily: "monospace", fontSize: 11 }}>{c.model}</dd>
-                    <dt>Latency</dt><dd>{fmt.ms(c.latency_ms)}</dd>
-                    <dt>Tokens in</dt><dd>{c.input_tokens.toLocaleString()}</dd>
-                    <dt>Tokens out</dt><dd>{c.output_tokens.toLocaleString()}</dd>
-                    <dt>Cost (ref)</dt><dd>${c.cost_usd.toFixed(5)}</dd>
-                  </dl>
-                </div>
-              ))}
-              <div style={{
-                marginTop: 8, padding: "10px 12px",
-                background: "var(--brand-subtle)",
-                borderRadius: "var(--radius-sm)",
-                fontSize: 12,
-              }}>
-                <strong>Session totals:</strong>{" "}
-                {totalTokens.toLocaleString()} tokens · ${totalCost.toFixed(5)} cost · {fmt.ms(totalLatency)} total
               </div>
-            </div>
-          )}
-
-          {/* What would raise confidence */}
-          {insight.would_raise_confidence.length > 0 && (
-            <div className="card">
-              <div className="card-title" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><HelpCircle size={16} /> What Would Raise Confidence</div>
-              <ul className="clean-list">
-                {insight.would_raise_confidence.map((m) => <li key={m}>{m}</li>)}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
