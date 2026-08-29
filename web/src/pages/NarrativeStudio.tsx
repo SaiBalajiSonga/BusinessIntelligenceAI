@@ -2,6 +2,7 @@ import Loader from "../components/Loader";
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import InlineFeedback from "../components/InlineFeedback";
+import { ShieldCheck, ShieldAlert, AlertTriangle, Cpu, HelpCircle, Bot } from "lucide-react";
 import type { Insight, Narrative } from "../types";
 
 interface Props { week: string; persona: string; hideHeader?: boolean; }
@@ -51,123 +52,100 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
       )}
 
       <div className="grid grid-2-1" style={{ gap: 20 }}>
-        {/* Left: Narrative */}
-        <div>
-          {/* Persona card */}
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            padding: "14px 18px",
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius)",
-            marginBottom: 16,
-          }}>
-            <div style={{
-              width: 42, height: 42,
-              borderRadius: "50%",
-              background: "var(--brand-subtle)",
-              border: "2px solid var(--brand)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 18,
-            }}>
-              {persona === "cfo" ? "??" : persona === "eu_category_manager" ? "???" : "??"}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                {insight.entitlement.persona.replace(/_/g, " ")}
+        {/* Left: Unified Narrative Card */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 16 }}>
+            {/* Header: Persona */}
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--page)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div className="avatar" style={{ fontSize: 16, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "var(--brand-subtle)", border: "2px solid var(--brand)" }}>
+                  {persona === "cfo" ? "??" : persona === "eu_category_manager" ? "???" : "??"}
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", lineHeight: 1.2, textTransform: "capitalize" }}>
+                    {insight.entitlement.persona.replace(/_/g, " ")}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                    Regions: {insight.entitlement.regions.join(", ")}
+                    {insight.entitlement.masked_columns.length > 0 && (
+                      <> · 🔒 {insight.entitlement.masked_columns.length} field{insight.entitlement.masked_columns.length > 1 ? "s" : ""} masked</>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                Regions: {insight.entitlement.regions.join(", ")}
-                {insight.entitlement.masked_columns.length > 0 && (
-                  <> · 🔒 {insight.entitlement.masked_columns.length} field{insight.entitlement.masked_columns.length > 1 ? "s" : ""} masked</>
+              <span className={`badge ${bs.badge}`} style={{ fontSize: 12 }}>
+                {bs.label}
+              </span>
+            </div>
+
+            {/* Body: Narrative text */}
+            <div style={{ padding: "24px 20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <div className="card-title" style={{ fontSize: 16 }}>Executive Narrative</div>
+                {!narrative.llm_called && (
+                  <span className="badge badge-neutral">No LLM call</span>
+                )}
+              </div>
+
+              {band === "abstain" ? (
+                <div style={{
+                  padding: "24px",
+                  background: "var(--abstain-bg)",
+                  border: "1px solid rgba(239,68,68,.3)",
+                  borderRadius: "var(--radius-sm)",
+                  textAlign: "center",
+                }}>
+                  <AlertTriangle size={32} style={{ color: "var(--abstain)", marginBottom: 12 }} />
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--abstain)", marginBottom: 8 }}>
+                    Engine Abstained
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                    {insight.confidence.action}
+                  </div>
+                </div>
+              ) : (
+                <div className="prose" style={{ fontSize: 14 }}>
+                  {narrative.text.split("\n\n").map((para, i) => (
+                    <p key={i}>{para}</p>
+                  ))}
+                </div>
+              )}
+
+              {/* Guard badges */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border-light)" }}>
+                <span className="pill">
+                  <span className="dot" style={{ background: narrative.guard.passed ? "var(--good)" : "var(--critical)" }} />
+                  {narrative.guard.figures_checked} figures verified
+                </span>
+                {narrative.guard.drafts_rejected > 0 && (
+                  <span className="pill" style={{ color: "var(--warning)" }}>
+                    <ShieldAlert size={12} /> {narrative.guard.drafts_rejected} draft{narrative.guard.drafts_rejected > 1 ? "s" : ""} rejected
+                  </span>
+                )}
+                <span className="pill">
+                  <Bot size={12} /> {narrative.llm_called ? narrative.source : "Deterministic"}
+                </span>
+                {narrative.guard.violations.length > 0 && (
+                  <span className="pill" style={{ color: "var(--critical)" }}>
+                    {narrative.guard.violations.length} violation{narrative.guard.violations.length > 1 ? "s" : ""} caught
+                  </span>
                 )}
               </div>
             </div>
-            <span className={`badge ${bs.badge}`}>
-              {bs.icon} {bs.label}
-            </span>
-          </div>
 
-          {/* Narrative text */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header">
-              <div>
-                <div className="card-title">Executive Narrative</div>
-                <div className="card-sub">
-                  {narrative.llm_called ? `Generated by ${narrative.source}` : "Generated from deterministic template (LLM not called)"}
-                </div>
+            {/* Footer: Analyst Feedback */}
+            <div style={{ padding: "16px 20px", background: "var(--surface-2)", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                Did this narrative help you make a decision?
               </div>
-              {!narrative.llm_called && (
-                <span className="badge badge-neutral">No LLM call</span>
-              )}
+              <InlineFeedback
+                week={week}
+                persona={persona}
+                kpi={insight.kpi}
+                confidence={insight.confidence.score}
+                impact={insight.gap ?? undefined}
+              />
             </div>
-
-            {band === "abstain" ? (
-              <div style={{
-                padding: "20px",
-                background: "var(--abstain-bg)",
-                border: "1px solid rgba(239,68,68,.3)",
-                borderRadius: "var(--radius-sm)",
-                textAlign: "center",
-              }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>🛑</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--abstain)", marginBottom: 8 }}>
-                  Engine Abstained
-                </div>
-                <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
-                  {insight.confidence.action}
-                </div>
-              </div>
-            ) : (
-              <div className="prose">
-                {narrative.text.split("\n\n").map((para, i) => (
-                  <p key={i}>{para}</p>
-                ))}
-              </div>
-            )}
-
-            {/* Guard badges */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
-              <span className="pill">
-                <span className="dot" style={{ background: narrative.guard.passed ? "var(--good)" : "var(--critical)" }} />
-                {narrative.guard.figures_checked} figures verified
-              </span>
-              {narrative.guard.drafts_rejected > 0 && (
-                <span className="pill" style={{ color: "var(--warning)" }}>
-                  ⚠️ {narrative.guard.drafts_rejected} draft{narrative.guard.drafts_rejected > 1 ? "s" : ""} rejected
-                </span>
-              )}
-              <span className="pill">
-                {narrative.llm_called ? `🤖 ${narrative.source}` : "📐 Deterministic template"}
-              </span>
-              {narrative.guard.violations.length > 0 && (
-                <span className="pill" style={{ color: "var(--critical)" }}>
-                  {narrative.guard.violations.length} violation{narrative.guard.violations.length > 1 ? "s" : ""} caught
-                </span>
-              )}
-            </div>
-
-            <p className="note" style={{ marginTop: 10 }}>
-              Every figure was cross-checked against the evidence object before display.
-              The validator rejects any number that wasn't computed deterministically.
-            </p>
-          </div>
-
-          {/* Analyst Feedback */}
-          <div className="card">
-            <div className="card-title" style={{ marginBottom: 12 }}>🧠 Analyst Feedback</div>
-            <p className="note" style={{ marginBottom: 14 }}>
-              Your feedback updates driver priors via <span className="has-tooltip" data-tooltip="Machine learning method to convert raw confidence scores into true probabilities">isotonic calibration</span>.
-            </p>
-            <InlineFeedback
-              week={week}
-              persona={persona}
-              kpi={insight.kpi}
-              confidence={insight.confidence.score}
-              impact={insight.gap ?? undefined}
-            />
           </div>
         </div>
 
@@ -175,7 +153,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
         <div className="grid" style={{ gap: 16, alignContent: "start" }}>
           {/* Guard report */}
           <div className="card">
-            <div className="card-title" style={{ marginBottom: 12 }}>🛡️ Data Verification Check</div>
+            <div className="card-title" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><ShieldCheck size={16} /> Data Verification Check</div>
             <dl className="kv-grid" style={{ marginBottom: narrative.guard.report !== "not applicable" ? 16 : 0 }}>
               <dt>Status</dt>
               <dd>
@@ -211,7 +189,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
           {/* LLM calls */}
           {narrative.calls.length > 0 && (
             <div className="card">
-              <div className="card-title" style={{ marginBottom: 12 }}>📡 LLM Calls</div>
+              <div className="card-title" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Cpu size={16} /> System Diagnostics (LLM)</div>
               {narrative.calls.map((c, i) => (
                 <div key={i} style={{
                   padding: "10px 12px",
@@ -250,7 +228,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
           {/* What would raise confidence */}
           {insight.would_raise_confidence.length > 0 && (
             <div className="card">
-              <div className="card-title" style={{ marginBottom: 12 }}>📈 What Would Raise Confidence</div>
+              <div className="card-title" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><HelpCircle size={16} /> What Would Raise Confidence</div>
               <ul className="clean-list">
                 {insight.would_raise_confidence.map((m) => <li key={m}>{m}</li>)}
               </ul>
