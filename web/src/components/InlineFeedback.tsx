@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { toast } from "./Toast";
 import type { VerdictType } from "../types";
-import { ThumbsUp, ThumbsDown, Check } from "lucide-react";
+import { ThumbsUp, ThumbsDown } from "lucide-react";
 
 interface Props {
   week: string;
@@ -25,12 +25,16 @@ const NEG_VERDICTS: { value: VerdictType; label: string; desc: string }[] = [
 export default function InlineFeedback({
   week, persona, kpi = "net_revenue", driver, confidence, impact
 }: Props) {
-  const [state, setState] = useState<"idle" | "liked" | "disliked" | "submitted">("idle");
+  const [state, setState] = useState<"idle" | "liked" | "disliking" | "disliked">("idle");
   const [submitting, setSubmitting] = useState(false);
   const [verdict, setVerdict] = useState<VerdictType | "">("");
   const [comment, setComment] = useState("");
 
-  const submit = async (v: VerdictType, c = "") => {
+  const submit = async (v: VerdictType, c = "", isUnlike = false) => {
+    // In a real app we'd have an API to remove feedback. 
+    // Here we just visually revert it.
+    if (isUnlike) return;
+
     setSubmitting(true);
     try {
       await api.submitFeedback({
@@ -41,7 +45,6 @@ export default function InlineFeedback({
         comment: c || null,
       });
       toast(v === "correct" ? "Feedback recorded." : "Feedback recorded - learning loop updated.", "success");
-      setState("submitted");
     } catch (e: any) {
       toast("Failed: " + (e.message || "Unknown error"), "error");
       setState("idle");
@@ -50,40 +53,63 @@ export default function InlineFeedback({
     }
   };
 
-  if (state === "submitted") {
-    return (
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--brand)", padding: "4px 0" }}>
-        <Check size={14} /> Feedback submitted
-      </div>
-    );
-  }
+  const handleLike = () => {
+    if (state === "liked") {
+      setState("idle");
+      // Optional: submit undo API call here
+    } else {
+      setState("liked");
+      submit("correct");
+    }
+  };
+
+  const handleDislike = () => {
+    if (state === "disliked" || state === "disliking") {
+      setState("idle");
+      setVerdict("");
+      setComment("");
+    } else {
+      setState("disliking");
+    }
+  };
+
+  const submitDislike = () => {
+    setState("disliked");
+    submit(verdict as VerdictType, comment);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-      {(state === "idle" || state === "liked") && (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 8 }}>
-            {state === "liked" ? "Recording..." : "Is this accurate?"}
-          </span>
-          <button 
-            className={`btn-feedback ${state === "liked" ? "anim-like" : ""}`}
-            onClick={() => { setState("liked"); submit("correct"); }}
-            title="Accurate"
-          >
-            <ThumbsUp size={14} />
-          </button>
-          <button 
-            className="btn-feedback" 
-            onClick={() => setState("disliked")}
-            title="Inaccurate"
-            disabled={state === "liked"}
-          >
-            <ThumbsDown size={14} />
-          </button>
-        </div>
-      )}
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 8, opacity: (state === "idle" || state === "disliking") ? 1 : 0, transition: "opacity 0.2s" }}>
+          Is this accurate?
+        </span>
+        <button 
+          className={`btn-yt-feedback ${state === "liked" ? "active-like" : ""}`}
+          onClick={handleLike}
+          title={state === "liked" ? "Unlike" : "Like"}
+        >
+          <ThumbsUp 
+            size={16} 
+            strokeWidth={state === "liked" ? 2.5 : 2} 
+            fill={state === "liked" ? "currentColor" : "none"} 
+          />
+        </button>
+        <div style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+        <button 
+          className={`btn-yt-feedback ${state === "disliked" || state === "disliking" ? "active-dislike" : ""}`} 
+          onClick={handleDislike}
+          title={state === "disliked" ? "Remove dislike" : "Dislike"}
+        >
+          <ThumbsDown 
+            size={16} 
+            strokeWidth={state === "disliked" || state === "disliking" ? 2.5 : 2} 
+            fill={state === "disliked" || state === "disliking" ? "currentColor" : "none"} 
+          />
+        </button>
+      </div>
 
-      {state === "disliked" && (
+      {state === "disliking" && (
         <div style={{ 
           background: "var(--surface)", 
           border: "1px solid var(--border)", 
@@ -91,10 +117,11 @@ export default function InlineFeedback({
           padding: "16px",
           width: "100%",
           maxWidth: 420,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+          animation: "slideDown 0.2s ease-out"
         }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
-            <ThumbsDown size={14} className="anim-dislike" style={{ color: "var(--neg)", fill: "var(--neg)" }} /> What was wrong?
+            What was wrong?
           </div>
           
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
@@ -123,7 +150,7 @@ export default function InlineFeedback({
             <button 
               className="btn btn-sm btn-primary" 
               disabled={!verdict || submitting}
-              onClick={() => submit(verdict as VerdictType, comment)}
+              onClick={submitDislike}
             >
               {submitting ? "Submitting..." : "Submit Feedback"}
             </button>
