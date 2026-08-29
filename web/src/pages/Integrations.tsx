@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { api } from "../api";
 import Loader from "../components/Loader";
+import { Cloud, Search, Database, Server, Component } from "lucide-react";
 
 const CONNECTORS = [
-  { id: "snowflake", name: "Snowflake", icon: "??", desc: "Connect to your Snowflake Data Cloud" },
-  { id: "bigquery", name: "Google BigQuery", icon: "??", desc: "Connect to your GCP Data Warehouse" },
-  { id: "postgresql", name: "PostgreSQL", icon: "??", desc: "Connect to standard PostgreSQL databases" },
-  { id: "redshift", name: "Amazon Redshift", icon: "??", desc: "Connect to your AWS Data Warehouse" },
-  { id: "databricks", name: "Databricks", icon: "??", desc: "Connect to Databricks SQL or Spark" },
+  { id: "snowflake", name: "Snowflake", icon: <Cloud size={32} color="var(--brand)" />, desc: "Connect to your Snowflake Data Cloud" },
+  { id: "bigquery", name: "Google BigQuery", icon: <Search size={32} color="#4285F4" />, desc: "Connect to your GCP Data Warehouse" },
+  { id: "postgresql", name: "PostgreSQL", icon: <Database size={32} color="#336791" />, desc: "Connect to standard PostgreSQL databases" },
+  { id: "redshift", name: "Amazon Redshift", icon: <Server size={32} color="#FF9900" />, desc: "Connect to your AWS Data Warehouse" },
+  { id: "databricks", name: "Databricks", icon: <Component size={32} color="#FF3621" />, desc: "Connect to Databricks SQL or Spark" },
 ];
 
 export default function Integrations() {

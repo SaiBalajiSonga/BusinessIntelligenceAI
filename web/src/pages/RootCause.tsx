@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import { Bridge, ConfidenceBars, SplitBar } from "../charts";
 import InlineFeedback from "../components/InlineFeedback";
+import { TrendingDown, Sprout, OctagonAlert, Lock } from "lucide-react";
 import type { Actions, Attribution, Cause, Insight, Split } from "../types";
 
 interface Props {
@@ -27,7 +28,7 @@ const BAND_STYLE: Record<string, string> = {
 const SCENARIOS = [
   {
     id: "multifactor",
-    icon: "📉",
+    icon: <TrendingDown size={18} />,
     title: "Multi-Factor Drop",
     sub: "Price · Mix · Stockout · Competitor",
     badge: "Required",
@@ -38,7 +39,7 @@ const SCENARIOS = [
   },
   {
     id: "sparse",
-    icon: "🌱",
+    icon: <Sprout size={18} />,
     title: "Sparse History",
     sub: "New SKU < 12 weeks data",
     badge: "Required",
@@ -49,7 +50,7 @@ const SCENARIOS = [
   },
   {
     id: "abstain",
-    icon: "🛑",
+    icon: <OctagonAlert size={18} />,
     title: "Low Confidence / Abstain",
     sub: "Contradictory signals detected",
     badge: "Required",
@@ -60,7 +61,7 @@ const SCENARIOS = [
   },
   {
     id: "entitlement",
-    icon: "🔒",
+    icon: <Lock size={18} />,
     title: "Role-Based Entitlement",
     sub: "Row filter applied before analysis",
     badge: "Required",

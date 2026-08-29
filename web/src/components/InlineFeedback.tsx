@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { toast } from "./Toast";
 import type { VerdictType } from "../types";
+import { ThumbsUp, ThumbsDown, Check } from "lucide-react";
 
 interface Props {
   week: string;
@@ -20,24 +21,6 @@ const NEG_VERDICTS: { value: VerdictType; label: string; desc: string }[] = [
   { value: "known_cause",  label: "Known Cause",  desc: "Already planned/known event" },
   { value: "not_material", label: "Not Material", desc: "Too small to care about" },
 ];
-
-const ThumbsUp = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-  </svg>
-);
-
-const ThumbsDown = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path>
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"></polyline>
-  </svg>
-);
 
 export default function InlineFeedback({
   week, persona, kpi = "net_revenue", driver, confidence, impact
@@ -70,36 +53,33 @@ export default function InlineFeedback({
   if (state === "submitted") {
     return (
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--brand)", padding: "4px 0" }}>
-        <CheckIcon /> Feedback submitted
+        <Check size={14} /> Feedback submitted
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-      {state === "idle" && (
+      {(state === "idle" || state === "liked") && (
         <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 8 }}>Is this accurate?</span>
+          <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 8 }}>
+            {state === "liked" ? "Recording..." : "Is this accurate?"}
+          </span>
           <button 
-            className="btn-feedback" 
+            className={`btn-feedback ${state === "liked" ? "anim-like" : ""}`}
             onClick={() => { setState("liked"); submit("correct"); }}
             title="Accurate"
           >
-            <ThumbsUp />
+            <ThumbsUp size={14} />
           </button>
           <button 
             className="btn-feedback" 
             onClick={() => setState("disliked")}
             title="Inaccurate"
+            disabled={state === "liked"}
           >
-            <ThumbsDown />
+            <ThumbsDown size={14} />
           </button>
-        </div>
-      )}
-
-      {state === "liked" && (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>
-          <span className="spinner" style={{ width: 12, height: 12 }} /> Recording...
         </div>
       )}
 
@@ -113,8 +93,8 @@ export default function InlineFeedback({
           maxWidth: 420,
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
         }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>
-            What was wrong?
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
+            <ThumbsDown size={14} className="anim-dislike" style={{ color: "var(--neg)", fill: "var(--neg)" }} /> What was wrong?
           </div>
           
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
