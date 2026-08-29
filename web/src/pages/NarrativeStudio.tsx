@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import InlineFeedback from "../components/InlineFeedback";
 import { ShieldAlert, AlertTriangle, HelpCircle, Bot } from "lucide-react";
-import { Bridge } from "../charts";
 import type { Insight, Narrative } from "../types";
 
 interface Props { week: string; persona: string; hideHeader?: boolean; }
@@ -50,7 +49,7 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
         </div>
       )}
 
-      <div className="grid grid-2-1" style={{ gap: 24, alignItems: "start" }}>
+      <div style={{ maxWidth: 960 }}>
         {/* Left: Unified Narrative Card */}
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div className="card" style={{ padding: 0, marginBottom: 16 }}>
@@ -161,27 +160,6 @@ export default function NarrativeStudio({ week, persona, hideHeader }: Props) {
         </div>
 
         
-        {/* Right: Chart context */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 16 }}>
-          <div className="card" style={{ padding: 24 }}>
-            <div className="card-title" style={{ marginBottom: 24 }}>Financial Impact Waterfall</div>
-            {insight.expected !== null && insight.actual !== null ? (
-              <div style={{ padding: "16px 0", height: 320, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Bridge
-                  expected={insight.expected}
-                  actual={insight.actual}
-                  causes={insight.causes}
-                  currency={insight.currency}
-                  onSelect={() => {}}
-                />
-              </div>
-            ) : (
-              <div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
-                Baseline data unavailable
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
