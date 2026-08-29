@@ -1,4 +1,10 @@
-import { useState } from "react";
+import re
+with open('web/src/components/InlineFeedback.tsx', 'r', encoding='utf-8') as f:
+    code = f.read()
+
+# I will replace the entire file content using python script to ensure it's fully rewritten
+
+new_code = '''import { useState } from "react";
 import { api } from "../api";
 import { toast } from "./Toast";
 import type { VerdictType } from "../types";
@@ -59,8 +65,8 @@ export default function InlineFeedback({
       });
       toast(v === "correct" ? "Feedback recorded." : "Feedback recorded - learning loop updated.", "success");
       setState("submitted");
-    } catch (e: any) {
-      toast("Failed: " + (e.message || "Unknown error"), "error");
+    } catch (e: unknown) {
+      toast(Failed: , "error");
       setState("idle");
     } finally {
       setSubmitting(false);
@@ -122,7 +128,7 @@ export default function InlineFeedback({
               <button
                 key={v.value}
                 onClick={() => setVerdict(v.value)}
-                className={`feedback-pill ${verdict === v.value ? "active" : ""}`}
+                className={eedback-pill }
                 title={v.desc}
               >
                 {v.label}
@@ -153,3 +159,7 @@ export default function InlineFeedback({
     </div>
   );
 }
+'''
+
+with open('web/src/components/InlineFeedback.tsx', 'w', encoding='utf-8') as f:
+    f.write(new_code)
