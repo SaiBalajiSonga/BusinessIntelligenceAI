@@ -5,9 +5,9 @@ import type { Actions, Recommendation } from "../types";
 
 interface Props { week: string; persona: string; }
 
-const KIND_ICON: Record<string, string> = {
-  corrective: "⚡",
-  instrumentation: "🔭",
+const KIND_ICON: Record<string, any> = {
+  corrective: <Wrench size={14} />,
+  instrumentation: <Search size={14} />,
 };
 
 const OWNER_AVATARS: Record<string, string> = {
@@ -134,7 +134,7 @@ function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; pe
           onClick={() => setExpanded((v) => !v)}
           style={{ marginTop: 8 }}
         >
-          {expanded ? "▲ Hide details" : "▼ Show monitoring & constraints"}
+          {expanded ? <><ChevronUp size={14} style={{marginRight:4}}/> Hide details</> : <><ChevronDown size={14} style={{marginRight:4}}/> Show monitoring & constraints</>}
         </button>
 
         {expanded && (
@@ -160,7 +160,7 @@ function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; pe
                 background: "var(--warning-bg)", border: "1px solid rgba(245,158,11,.3)",
                 borderRadius: "var(--radius-sm)", fontSize: 12.5, color: "var(--ink-2)",
               }}>
-                🛡️ <strong>Guardrail:</strong> {rec.monitoring.guardrail}
+              <ShieldAlert size={14} style={{ color: "var(--warning)", marginRight: 6 }} /> <strong>Guardrail:</strong> {rec.monitoring.guardrail}
               </div>
             )}
             {rec.assumptions.length > 0 && (
@@ -176,8 +176,8 @@ function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; pe
 
         {/* Feedback */}
         <div className="feedback-btns" style={{ marginTop: 12 }}>
-          <button className="btn btn-xs btn-confirm" onClick={() => setFbOpen(true)}>✓ Confirm</button>
-          <button className="btn btn-xs btn-danger" onClick={() => setFbOpen(true)}>✗ Wrong Lever</button>
+          <button className="btn btn-xs btn-confirm" onClick={() => setFbOpen(true)} style={{display: "flex", alignItems: "center", gap: 4}}><Check size={14} /> Confirm</button>
+          <button className="btn btn-xs btn-danger" onClick={() => setFbOpen(true)} style={{display: "flex", alignItems: "center", gap: 4}}><X size={14} /> Wrong Lever</button>
         </div>
       </div>
 
@@ -214,10 +214,10 @@ export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
   }, [week, persona]);
 
   if (loading) return (
-    <div className="loading-screen"><div className="spinner" /><div className="loading-text">Loading recommendations…</div></div>
+    <div className="loading-screen"><div className="spinner" /><div className="loading-text">Loading recommendations...</div></div>
   );
 
-  if (error) return <div className="error-banner">⚠️ {error}</div>;
+  if (error) return <div className="error-banner"><AlertCircle size={16} /> {error}</div>;
 
   const recs = actions?.recommendations ?? [];
   const corrective = recs.filter((r) => r.kind === "corrective");
@@ -229,7 +229,7 @@ export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
         <div className="page-header">
           <h1 className="page-title">Action Playbook</h1>
           <p className="page-sub">
-            Recommended mitigations · Expected impact bounds · Guardrails · Decision rights
+            Recommended mitigations &middot; Expected impact bounds &middot; Guardrails &middot; Decision rights
           </p>
         </div>
       )}
@@ -270,8 +270,8 @@ export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
         display: "flex",
         gap: 10,
       }}>
-        ✅ Expected impact is <strong style={{ color: "var(--ink)" }}>computed from attributed contribution, never written by the model.</strong>
-        {" "}Each slider recalculates: <code>recovery = |contribution| × reversal_fraction</code>.
+        <Info size={16} style={{ flexShrink: 0, marginTop: 2 }} /> <span>Expected impact is <strong style={{ color: "var(--ink)" }}>computed from attributed contribution, never written by the model.</strong>
+        {" "}Each slider recalculates: <code>recovery = |contribution| × reversal_fraction</code>.</span></>
       </div>
 
       {corrective.length > 0 && (
@@ -298,7 +298,7 @@ export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
 
       {recs.length === 0 && (
         <div className="empty-state">
-          <div className="empty-state-icon">🎯</div>
+          <div className="empty-state-icon"><Inbox size={48} /></div>
           <div className="empty-state-title">No recommendations</div>
           <div className="empty-state-sub">Engine abstained or gap is below action threshold (£25k)</div>
         </div>
