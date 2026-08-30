@@ -1,17 +1,46 @@
 # BusinessIntelligence.ai
 
-An analytical engine that detects material changes in business KPIs, identifies the root causes using deterministic arithmetic and machine learning (LightGBM + TreeSHAP), and generates persona-tailored action plans.
+> **Don't just tell me what changed. Tell me why — and what to do next.**
+
+Most BI tools stop at the dashboard: they'll show you that revenue dropped, but leave the root-cause investigation to an analyst manually cross-tabulating spreadsheets across systems that don't even agree on time grain. Pure LLM approaches "solve" this by having a model reason over raw numbers directly — and inherit the model's willingness to hallucinate a plausible-sounding explanation even when the underlying arithmetic is wrong.
+
+**BusinessIntelligence.ai** takes a different position: **the LLM never becomes the source of quantitative truth.** Every number a user sees — variance, attribution, confidence — is produced by deterministic computation or a trained ML model. The LLM's only job is to turn already-verified evidence into a narrative a specific business persona can act on.
+
+**Compute first. Explain second.**
 
 ---
 
-## Overview
+## The problem, in one picture
 
-Most BI tools display dashboards showing *that* a metric moved, but leave the root-cause diagnosis to manual cross-tabulation. Pure LLM approaches (like Text-to-SQL) often hallucinate calculations or mix mismatched time grains.
+```
+Data Sources → Dashboards → Analyst Investigation → Business Decision
+  (POS, ERP,     (metric        (export data,
+   Marketing)     moved)         reconcile systems,
+                                  find correlations,
+                                  build slides)
+```
 
-**BusinessIntelligence.ai** separates computation from narrative:
-- **Deterministic & ML Core (Python, DuckDB, LightGBM, TreeSHAP)**: Computes 100% of the metric variances, Price-Volume-Mix (PVM) bridges, dimensional surprise rankings, and per-feature Shapley attributions.
-- **Abstention Gate**: Evaluates data freshness, sample depth, and cross-source contradictions. If confidence falls below 60%, the engine abstains from speculative root-cause attribution and requests data verification.
-- **Governed LLM Layer (Gemini / Nemotron / Local fallback)**: Converts the verified mathematical evidence into role-specific business narratives (Sales, Supply Chain, Marketing) without performing arithmetic.
+The bottleneck isn't reporting — it's **decision latency**. Five things routinely break this pipeline:
+
+1. **Fragmented data** — POS, ERP, and marketing systems operate at different grains and refresh on different clocks.
+2. **KPI movement ≠ KPI explanation** — a dashboard can tell you Net Revenue is down 12%. It can't tell you why.
+3. **No single source of truth** — reconciling systems by hand is where most analyst time goes.
+4. **LLMs can explain, but they can hallucinate** — an LLM should never be trusted to perform business arithmetic.
+5. **Insight doesn't automatically become action** — even after finding a driver, someone still needs an owner, a lever, and a next step.
+
+---
+
+## How BusinessIntelligence.ai is different
+
+| Traditional GenAI BI | BusinessIntelligence.ai |
+|---|---|
+| LLM interprets raw data | Deterministic engine computes evidence |
+| Text-to-SQL can introduce silent errors | Governed KPI contracts (Pydantic v2) define every calculation |
+| AI may perform arithmetic | LLM never performs arithmetic |
+| One generic answer for everyone | Persona-specific narratives (CFO, Supply Chain, Marketing) |
+| Always tries to answer | Can explicitly **abstain** when confidence is low |
+| Insight ends at explanation | Driver → Lever → Action → Owner |
+| Static, one-shot output | Analyst feedback loop calibrates future runs |
 
 ---
 
@@ -29,40 +58,77 @@ flowchart LR
     G --> I[Streamlit Dashboard<br/>Waterfall & Action Board]
 ```
 
----
+**The pipeline, stage by stage:**
 
-## Core Capabilities
+1. **Reconciliation** — POS (daily), ERP logistics (weekly, 2-day lag), and marketing ad spend (6-hourly, 48-hour attribution settlement) are aligned onto a common analysis grid without losing source grain, and every input is tagged with freshness metadata.
+2. **Anomaly & materiality filtering** — a movement has to clear both a statistical threshold (is it significant?) and a business threshold (does it matter?) before it's surfaced.
+3. **Decomposition & attribution** — Price-Volume-Mix (PVM) bridges split revenue/margin variance into exact additive components; LightGBM + TreeSHAP attribute complex multi-factor interactions (e.g. `discount_rate × freight_surcharge × stockout_duration`) down to instance-level Shapley values.
+4. **Evidence Object** — every number, its lineage, and its confidence inputs are packaged together — nothing reaches the narrator ungrounded.
+5. **Confidence gate** — freshness, historical depth, and cross-source consistency are combined into a confidence score. Below 60%, the system **abstains** and asks for verification instead of guessing.
+6. **Persona narration** — only once evidence clears the gate does the LLM (Gemini / NVIDIA Nemotron / offline rule-based fallback) turn it into role-specific language. It never touches the math.
 
-1. **Multi-Source Reconciliation**:
-   - Reconciles daily transactional POS data with weekly ERP logistics snapshots and marketing ad spend (incorporating 48-hour attribution settlement windows).
-2. **Deterministic Metric Decomposition**:
-   - **Price-Volume-Mix (PVM)**: Decomposes revenue and margin variance into exact additive price, volume, and product mix components.
-   - **Dimensional Surprise Ranking**: Ranks dimension contributions (Category, Region, Channel) by deviation from expected baseline shares.
-3. **ML-Driven Causal Attribution (LightGBM + TreeSHAP)**:
-   - Evaluates complex multi-factor interactions (e.g., `discount_rate × freight_surcharge × stockout_duration`) and computes instance-level Shapley values ($\phi_i$) for each driver.
-4. **Honest Abstention Mechanism**:
-   - Detects contradictory signals (e.g., ad conversions spiking while POS transactions drop due to a broken tracking pixel) and suppresses automated attribution when data quality thresholds are breached.
-5. **Persona-Specific Action Recommendations**:
-   - Maps identified drivers into actionable items: $Driver \to Lever \to Prescriptive\ Action \to Expected\ Impact \to Owner$.
-   - Tailored views for **VP Commercial**, **Supply Chain Director**, and **Marketing Lead**.
+### Why abstention matters
+
+Imagine marketing conversions spike while POS transactions fall at the same time — a classic symptom of a broken tracking pixel. A naive system would confidently declare "marketing caused the revenue decline." BusinessIntelligence.ai detects the contradiction, lowers confidence below threshold, and asks the analyst to verify instrumentation before attributing anything.
+
+**A trustworthy AI system has to know when not to answer.**
 
 ---
 
-## KPIs & Data Sources
+## From insight to action
 
-### Tracked KPI Tree
-- **Net Revenue**: $\text{Sessions} \times \text{Conversion Rate} \times \text{AOV} - \text{Returns}$
-- **Gross Margin %**: $\frac{\text{Net Revenue} - \text{COGS}}{\text{Net Revenue}}$
-- **Average Order Value (AOV)**: $\text{Units per Order} \times \text{Average Selling Price}$
+Finding a driver isn't the finish line. Every material driver is mapped through:
+
+```
+Driver → Lever → Prescriptive Action → Expected Impact → Owner
+```
+
+Example, from a real prototype run:
+
+| Driver | Lever | Action | Recovery | Owner |
+|---|---|---|---|---|
+| Basket Mix (−£610,954) | Campaign mix | Rebalance spend 330,990 → 180,032 | **+£402,324** | Marketing Lead |
+
+```
+Recovery = |Contribution| × Reversal Fraction
+```
+
+Traditional analytics stops at "basket mix contributed −£610K." This stops at "change campaign mix, here's the expected recovery, and here's who owns it."
+
+---
+
+## Persona-specific intelligence
+
+The same evidence produces different views depending on who's looking:
+
+- **CFO / VP Commercial** — "How large is the financial impact?" → revenue bridge, margin impact, top drivers, recovery trend.
+- **Supply Chain Director** — "Where is operational leakage happening?" → fill rate, stockout duration, SKU × week drivers.
+- **Marketing Lead** — "Which campaigns should I change?" → ROAS, CAC, channel attribution, settlement-aware spend data.
+
+---
+
+## Tracked KPI Tree
+
+- **Net Revenue** = Sessions × Conversion Rate × AOV − Returns
+- **Gross Margin %** = (Net Revenue − COGS) / Net Revenue
+- **AOV** = Units per Order × Average Selling Price
 - **Fill Rate & Stockout Duration** (Logistics & Supply Chain)
 - **ROAS & CAC** (Performance Marketing)
 
-### Input Data Sources
+## Input Data Sources
+
 | Source | Granularity | Refresh Cadence | Handled Mismatch |
-| :--- | :--- | :--- | :--- |
-| **POS Sales** | Order line $\times$ Day | Daily | Baseline transactional grain |
-| **Logistics ERP** | SKU $\times$ Week | Weekly (2-day lag) | Resampled to weekly alignment; freshness penalties |
-| **Marketing Ads** | Campaign $\times$ Day | 6-hourly (48h lag) | Tagged with settlement window flag |
+|---|---|---|---|
+| POS Sales | Order line × Day | Daily | Baseline transactional grain |
+| Logistics ERP | SKU × Week | Weekly (2-day lag) | Resampled to weekly alignment; freshness penalties |
+| Marketing Ads | Campaign × Day | 6-hourly (48h lag) | Tagged with settlement window flag |
+
+---
+
+## Governance & continuous learning
+
+- **KPI Semantic Contracts** (Pydantic v2) — every KPI has a definition, calculation, unit, materiality threshold, statistical threshold, lineage, and access restrictions centralized in one place.
+- **Feedback loop** — analysts tag each output as Correct / Wrong Driver / Unclear / Not Material. This feedback calibrates confidence scoring, improves attribution, and refines persona prompts over time.
 
 ---
 
@@ -101,59 +167,51 @@ BusinessIntelligence.ai/
 ## Getting Started
 
 ### Prerequisites
+
 - Python 3.10 or higher
 - Git
 
 ### Installation
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/SaiBalajiSonga/BusinessIntelligence.ai.git
-   cd BusinessIntelligence.ai
-   ```
+```bash
+git clone https://github.com/SaiBalajiSonga/BusinessIntelligenceAI.git
+cd BusinessIntelligenceAI
 
-2. **Create and activate a virtual environment:**
-   ```bash
-   # Windows (PowerShell)
-   python -m venv venv
-   .\venv\Scripts\Activate.ps1
+# Windows (PowerShell)
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 
-   # macOS / Linux
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
+# macOS / Linux
+python3 -m venv venv
+source venv/bin/activate
 
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+pip install -r requirements.txt
+```
 
-4. **(Optional) Configure API keys:**
-   Create a `.env` file in the root directory if you wish to use Gemini, NVIDIA Nemotron, or Groq for natural language synthesis. If omitted, the engine uses a built-in deterministic rule-based narrator:
-   ```ini
-   GEMINI_API_KEY=your_gemini_key_here
-   # or
-   NVIDIA_API_KEY=your_nvidia_key_here
-   ```
+**(Optional) Configure API keys** — create a `.env` file if you want Gemini, NVIDIA Nemotron, or Groq for narrative synthesis. Without one, the engine falls back to a built-in deterministic rule-based narrator:
 
----
+```
+GEMINI_API_KEY=your_gemini_key_here
+# or
+NVIDIA_API_KEY=your_nvidia_key_here
+```
 
-## Usage
+### Usage
 
-### 1. Generate Dataset with Benchmark Scenarios
-Generate 90 days of multi-source enterprise data with pre-configured anomaly scenarios (e.g., Margin Drop, Product Mix Shift, Tracking Pixel Failure):
+**1. Generate a dataset with benchmark anomaly scenarios** (Margin Drop, Product Mix Shift, Tracking Pixel Failure):
+
 ```bash
 python -m engine.data_generator
 ```
 
-### 2. Run Tests
-Validate PVM mathematical balance, SHAP consistency, and the abstention gate:
+**2. Run the test suite** — validates PVM mathematical balance, SHAP consistency, and the abstention gate:
+
 ```bash
 pytest tests/ -v
 ```
 
-### 3. Launch Dashboard
-Start the interactive workspace:
+**3. Launch the dashboard:**
+
 ```bash
 streamlit run ui/app.py
 ```
@@ -162,12 +220,24 @@ streamlit run ui/app.py
 
 ## Tech Stack
 
-- **In-Memory Analytics**: [DuckDB](https://duckdb.org/)
-- **Machine Learning & Explainability**: [LightGBM](https://lightgbm.readthedocs.io/), [SHAP](https://shap.readthedocs.io/)
-- **Data Manipulation & Statistics**: Pandas, NumPy, SciPy, Statsmodels
-- **Schema Contracts**: Pydantic v2
-- **Dashboard & Visualizations**: Streamlit, Plotly
-- **Language Synthesis**: Google Gemini / NVIDIA Nemotron / Offline Rule Engine
+| Layer | Tools |
+|---|---|
+| In-memory analytics | [DuckDB](https://duckdb.org/) |
+| ML & explainability | [LightGBM](https://lightgbm.readthedocs.io/), [SHAP](https://shap.readthedocs.io/) |
+| Data & statistics | Pandas, NumPy, SciPy, Statsmodels |
+| Schema contracts | Pydantic v2 |
+| Dashboard | Streamlit, Plotly |
+| Language synthesis | Google Gemini / NVIDIA Nemotron / offline rule engine |
+
+Production compute can move from DuckDB to Snowflake, Databricks, or Microsoft Fabric without changing the underlying intelligence contract.
+
+---
+
+## Roadmap
+
+- **Phase 1 — Prototype** ✅ KPI intelligence · ✅ Attribution · ✅ Abstention · ✅ Persona narratives · ✅ Actions · ✅ Feedback
+- **Phase 2 — Enterprise Hardening** → Row/column/domain-level access control · Snowflake / Databricks / Microsoft Fabric connectors · Native lineage & audit
+- **Phase 3 — Proactive Intelligence** → Slack / Teams / Email alerts · Automated model retraining · Drift monitoring · Expanded KPI domains
 
 ---
 
