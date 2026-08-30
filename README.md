@@ -1,122 +1,176 @@
-# BusinessIntelligence.ai 🧠📊
+# BusinessIntelligence.ai
 
-An enterprise-grade, agentic analytical engine that detects material changes in business KPIs, mathematically isolates root causes, and generates persona-tailored action plans. 
-
-Unlike traditional BI dashboards that leave root-cause diagnosis to manual cross-tabulation, and unlike pure LLM approaches (like Text-to-SQL) that hallucinate calculations, **BusinessIntelligence.ai** enforces a strict architectural boundary: **Deterministic Mathematics first, Language generation second.**
+An analytical engine that detects material changes in business KPIs, identifies the root causes using deterministic arithmetic and machine learning (LightGBM + TreeSHAP), and generates persona-tailored action plans.
 
 ---
 
-## 🏗️ Architecture & Philosophy
+## Overview
 
-The engine separates computation from narrative through a rigorous pipeline:
+Most BI tools display dashboards showing *that* a metric moved, but leave the root-cause diagnosis to manual cross-tabulation. Pure LLM approaches (like Text-to-SQL) often hallucinate calculations or mix mismatched time grains.
 
-1. **Deterministic Core (Python, FastAPI)**: Computes 100% of the metric variances, executes Logarithmic Mean Divisia Index (LMDI) decomposition, calculates Jensen-Shannon divergence for uncharacteristic behavior, and applies Role-Based Access Control (RBAC) row-level filtering *before* analysis.
-2. **Abstention Gate & Data Validation**: Evaluates data freshness SLAs, sample depth (statistical significance), and cross-source contradictions. If confidence falls below the strict materiality threshold, the engine honestly **abstains** from speculative root-cause attribution and instead requests data verification.
-3. **The Evidence Object**: All mathematical findings are packed into a locked JSON Schema (The Evidence Object).
-4. **Governed LLM Layer**: The LLM converts the mathematical evidence into role-specific business narratives (CFO, Category Manager, Analyst). **Crucially, an interception middleware verifies every single number the LLM generates against the Evidence Object.** Any hallucinatory arithmetic causes the draft to be instantly rejected.
-5. **Interactive UI (React + Vite)**: A sleek, zero-latency dashboard built for business leaders, completely devoid of developer jargon, featuring YouTube-style haptic feedback loops.
-
----
-
-## 🚀 Core Capabilities
-
-### 1. LMDI Root Cause Decomposition
-Decomposes complex metric deviations (e.g., Net Revenue dropping) into mathematically perfect, additive components: Price, Volume, Mix, and Competitor influence. This allows the engine to definitively state whether a drop was caused by a discount strategy (Price) or a shift toward cheaper products (Mix).
-
-### 2. Isotonic Calibration & Laplace Smoothing (Feedback Loop)
-The platform actively learns from Analyst feedback. When a user clicks "Dislike: Wrong Driver", the engine utilizes **Isotonic Regression** to calibrate the raw statistical confidence scores into true empirical probabilities. **Laplace Smoothing** computes continuous precision scores to penalize drivers that frequently trigger false positives, preventing alert fatigue over time.
-
-### 3. Role-Based Entitlements & Masking
-Data access is enforced at the mathematical level, not just visually hidden. If an EU Category Manager logs in, they only see DE, FR, NL data. Highly sensitive metrics (like Gross Margin %) are structurally masked for unauthorized personas before any decomposition occurs.
-
-### 4. Zero-Latency Caching & UI Polish
-The React frontend leverages an aggressive 30-second TTL in-memory cache and `onMouseEnter` pre-fetching. Combined with custom CSS `@keyframes` and professional SVG iconography (`lucide-react`), the platform feels instant and incredibly tactile.
+**BusinessIntelligence.ai** separates computation from narrative:
+- **Deterministic & ML Core (Python, DuckDB, LightGBM, TreeSHAP)**: Computes 100% of the metric variances, Price-Volume-Mix (PVM) bridges, dimensional surprise rankings, and per-feature Shapley attributions.
+- **Abstention Gate**: Evaluates data freshness, sample depth, and cross-source contradictions. If confidence falls below 60%, the engine abstains from speculative root-cause attribution and requests data verification.
+- **Governed LLM Layer (Gemini / Nemotron / Local fallback)**: Converts the verified mathematical evidence into role-specific business narratives (Sales, Supply Chain, Marketing) without performing arithmetic.
 
 ---
 
-## 📂 Project Structure
+## Architecture & Data Flow
+
+```mermaid
+flowchart LR
+    A[Data Sources<br/>POS, ERP, Ads] --> B[Cadence Aligner<br/>& Reconciliation]
+    B --> C[Statistical Anomaly &<br/>Materiality Filter]
+    C --> D[PVM Bridge &<br/>LightGBM + TreeSHAP]
+    D --> E[Evidence Object<br/>All Numbers & Proofs]
+    E --> F{Confidence<br/>>= 60%?}
+    F -->|Yes| G[LLM Narrator<br/>Persona Views]
+    F -->|No| H[Abstention Alert<br/>Audit Data Source]
+    G --> I[Streamlit Dashboard<br/>Waterfall & Action Board]
+```
+
+---
+
+## Core Capabilities
+
+1. **Multi-Source Reconciliation**:
+   - Reconciles daily transactional POS data with weekly ERP logistics snapshots and marketing ad spend (incorporating 48-hour attribution settlement windows).
+2. **Deterministic Metric Decomposition**:
+   - **Price-Volume-Mix (PVM)**: Decomposes revenue and margin variance into exact additive price, volume, and product mix components.
+   - **Dimensional Surprise Ranking**: Ranks dimension contributions (Category, Region, Channel) by deviation from expected baseline shares.
+3. **ML-Driven Causal Attribution (LightGBM + TreeSHAP)**:
+   - Evaluates complex multi-factor interactions (e.g., `discount_rate × freight_surcharge × stockout_duration`) and computes instance-level Shapley values ($\phi_i$) for each driver.
+4. **Honest Abstention Mechanism**:
+   - Detects contradictory signals (e.g., ad conversions spiking while POS transactions drop due to a broken tracking pixel) and suppresses automated attribution when data quality thresholds are breached.
+5. **Persona-Specific Action Recommendations**:
+   - Maps identified drivers into actionable items: $Driver \to Lever \to Prescriptive\ Action \to Expected\ Impact \to Owner$.
+   - Tailored views for **VP Commercial**, **Supply Chain Director**, and **Marketing Lead**.
+
+---
+
+## KPIs & Data Sources
+
+### Tracked KPI Tree
+- **Net Revenue**: $\text{Sessions} \times \text{Conversion Rate} \times \text{AOV} - \text{Returns}$
+- **Gross Margin %**: $\frac{\text{Net Revenue} - \text{COGS}}{\text{Net Revenue}}$
+- **Average Order Value (AOV)**: $\text{Units per Order} \times \text{Average Selling Price}$
+- **Fill Rate & Stockout Duration** (Logistics & Supply Chain)
+- **ROAS & CAC** (Performance Marketing)
+
+### Input Data Sources
+| Source | Granularity | Refresh Cadence | Handled Mismatch |
+| :--- | :--- | :--- | :--- |
+| **POS Sales** | Order line $\times$ Day | Daily | Baseline transactional grain |
+| **Logistics ERP** | SKU $\times$ Week | Weekly (2-day lag) | Resampled to weekly alignment; freshness penalties |
+| **Marketing Ads** | Campaign $\times$ Day | 6-hourly (48h lag) | Tagged with settlement window flag |
+
+---
+
+## Project Structure
 
 ```
 BusinessIntelligence.ai/
-├── api/                           # Backend Server (FastAPI)
-│   ├── main.py                    # REST API entrypoint & static file serving
-│   ├── cache.py                   # In-memory TTL caching engine
-│   ├── service.py                 # Core analysis orchestration
-│   ├── engine/                    # Mathematical Core
-│   │   ├── detect.py              # Anomaly & Materiality (Z-Scores)
-│   │   ├── confidence.py          # Abstention logic & data gaps
-│   │   ├── lmdi.py                # Logarithmic Mean Divisia Index math
-│   │   └── attribution.py         # Dimensional surprise ranking (Jensen-Shannon)
-│   ├── feedback/                  # Machine Learning Feedback Loop
-│   │   ├── store.py               # Feedback persistence
-│   │   └── learn.py               # Isotonic Calibration & Laplace Smoothing
-│   └── narrative/                 # LLM Integration
-│       ├── provider.py            # API layer (Gemini, Groq, etc)
-│       └── guard.py               # Hallucination interceptor (Numeric Validation)
-│
-├── web/                           # Frontend UI (React + Vite)
-│   ├── src/
-│   │   ├── pages/                 # NarrativeStudio, RootCause, Overview, Integrations
-│   │   ├── components/            # InlineFeedback, Animated Quote Loader, Toast
-│   │   ├── charts/                # Financial Impact Waterfall (Bridge Charts)
-│   │   ├── api.ts                 # Type-safe API client & Prefetching
-│   │   ├── types.ts               # Strict TypeScript interfaces
-│   │   └── styles.css             # Custom CSS variables, Grid layouts, animations
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── kpis.yaml                      # Semantic Contract defining KPIs & thresholds
+├── data/                            # Generated enterprise datasets
+│   ├── pos_orders.csv
+│   ├── inventory_logistics.csv
+│   └── marketing_campaigns.csv
+├── engine/                          # Core analytical and ML modules
+│   ├── config.py                    # Pydantic data schemas & contracts
+│   ├── data_generator.py            # Multi-grain enterprise data generator
+│   ├── database.py                  # DuckDB in-memory OLAP connection
+│   ├── reconciliation.py            # Grain alignment & lag handler
+│   ├── anomaly.py                   # STL baseline & Z-score filter
+│   ├── pvm_decomposition.py         # Price-Volume-Mix calculation
+│   ├── ml_shap_engine.py            # LightGBM + TreeSHAP driver attribution
+│   ├── contradiction.py             # Confidence scorer & abstention gate
+│   ├── evidence_pack.py             # Evidence object builder
+│   └── llm_orchestrator.py          # Governed persona synthesis & fallback
+├── ui/                              # User Interface
+│   ├── app.py                       # Streamlit application entrypoint
+│   └── components/                  # Waterfalls, drawers, and persona cards
+├── tests/                           # Unit & integration test suite
+│   ├── test_pvm.py
+│   ├── test_ml_shap.py
+│   └── test_abstention.py
+├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## 🛠️ Getting Started (Local Development)
-
-The application is designed to be completely self-contained. The FastAPI backend serves the REST API on `/v1` and simultaneously serves the built React frontend on `/`.
+## Getting Started
 
 ### Prerequisites
-- **Python 3.10+**
-- **Node.js 18+**
+- Python 3.10 or higher
+- Git
 
-### 1. Build the Frontend
-```bash
-cd web
-npm install
-npm run build
-cd ..
-```
-*(Note: If you encounter Windows Application Control policies blocking Rollup during build, the repository includes a pre-built `/dist` directory for immediate backend serving).*
+### Installation
 
-### 2. Start the Backend Server
-```bash
-# Create and activate a virtual environment
-python -m venv venv
-# Windows: .\venv\Scripts\Activate.ps1
-# Mac/Linux: source venv/bin/activate
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/SaiBalajiSonga/BusinessIntelligence.ai.git
+   cd BusinessIntelligence.ai
+   ```
 
-# Install Python dependencies
-pip install fastapi uvicorn pydantic scikit-learn pandas
+2. **Create and activate a virtual environment:**
+   ```bash
+   # Windows (PowerShell)
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
 
-# Run the server
-python -m uvicorn api.main:app --port 8000 --host 127.0.0.1 --env-file .env
-```
+   # macOS / Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
-### 3. Access the Dashboard
-Open your browser and navigate to:
-👉 **[http://127.0.0.1:8000](http://127.0.0.1:8000)**
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-*(API Swagger documentation is available at `http://127.0.0.1:8000/docs`)*
-
----
-
-## 🧪 Technical Highlights
-
-- **The Hallucination Interceptor**: The LLM is forced to output JSON containing arrays of numbers. `narrative/guard.py` rips out every number the LLM produced and checks if it exists in the `Evidence` object passed to the prompt. If `42.5` appears in the text but wasn't computed by the deterministic engine, the generation is rejected.
-- **Isotonic Calibration**: `feedback/learn.py` maps non-linear heuristic scores (e.g. data freshness + volume = 74) to empirical accuracy probabilities (e.g. 88% chance this driver is correct) based on historical thumbs-up/down clicks.
-- **YouTube-Style Micro-Interactions**: The `InlineFeedback.tsx` React component uses custom bouncy cubic-bezier `@keyframes` and un-filled crisp SVG toggles to mimic the premium haptic feel of enterprise applications, completely shedding the "developer UI" aesthetic. 
+4. **(Optional) Configure API keys:**
+   Create a `.env` file in the root directory if you wish to use Gemini, NVIDIA Nemotron, or Groq for natural language synthesis. If omitted, the engine uses a built-in deterministic rule-based narrator:
+   ```ini
+   GEMINI_API_KEY=your_gemini_key_here
+   # or
+   NVIDIA_API_KEY=your_nvidia_key_here
+   ```
 
 ---
 
-## 📄 License
-MIT License
+## Usage
+
+### 1. Generate Dataset with Benchmark Scenarios
+Generate 90 days of multi-source enterprise data with pre-configured anomaly scenarios (e.g., Margin Drop, Product Mix Shift, Tracking Pixel Failure):
+```bash
+python -m engine.data_generator
+```
+
+### 2. Run Tests
+Validate PVM mathematical balance, SHAP consistency, and the abstention gate:
+```bash
+pytest tests/ -v
+```
+
+### 3. Launch Dashboard
+Start the interactive workspace:
+```bash
+streamlit run ui/app.py
+```
+
+---
+
+## Tech Stack
+
+- **In-Memory Analytics**: [DuckDB](https://duckdb.org/)
+- **Machine Learning & Explainability**: [LightGBM](https://lightgbm.readthedocs.io/), [SHAP](https://shap.readthedocs.io/)
+- **Data Manipulation & Statistics**: Pandas, NumPy, SciPy, Statsmodels
+- **Schema Contracts**: Pydantic v2
+- **Dashboard & Visualizations**: Streamlit, Plotly
+- **Language Synthesis**: Google Gemini / NVIDIA Nemotron / Offline Rule Engine
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
