@@ -37,14 +37,41 @@ export default function Integrations() {
       </div>
 
       {step === "select" && (
-        <div className="grid grid-3">
-          {CONNECTORS.map((c) => (
-            <button key={c.id} className="card scenario-card" onClick={() => { setSelected(c); setStep("configure"); }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>{c.icon}</div>
-              <div className="card-title">{c.name}</div>
-              <div className="card-sub">{c.desc}</div>
-            </button>
-          ))}
+        <div className="grid grid-2-1" style={{ gap: 24, alignItems: "start" }}>
+          <div>
+            <div className="card-title" style={{ marginBottom: 16 }}>Available Connectors</div>
+            <div className="grid grid-2">
+              {CONNECTORS.map((c) => (
+                <button key={c.id} className="card scenario-card" onClick={() => { setSelected(c); setStep("configure"); }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>{c.icon}</div>
+                  <div className="card-title">{c.name}</div>
+                  <div className="card-sub">{c.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="card" style={{ background: "var(--surface-2)" }}>
+            <div className="card-title" style={{ marginBottom: 12 }}>Connection Requirements</div>
+            <p className="note" style={{ marginBottom: 16 }}>
+              The engine requires read-only access to standard star-schema tables in your warehouse.
+            </p>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Required Tables (Retail):</div>
+            <ul className="clean-list" style={{ marginBottom: 20 }}>
+              <li><code style={{ fontSize: 12 }}>fct_sales</code> (POS Orders)</li>
+              <li><code style={{ fontSize: 12 }}>fct_traffic</code> (Web Sessions)</li>
+              <li><code style={{ fontSize: 12 }}>fct_inventory</code> (Stock & SLA)</li>
+              <li><code style={{ fontSize: 12 }}>fct_marketing_weekly</code> (Ad Spend)</li>
+            </ul>
+            
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>How it works:</div>
+            <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
+              <li style={{ paddingBottom: 6 }}>Select your Data Warehouse provider.</li>
+              <li style={{ paddingBottom: 6 }}>Provide read-only credentials or a service account token.</li>
+              <li style={{ paddingBottom: 6 }}>The engine will use <strong>DuckDB</strong> to natively query your cloud warehouse without pulling data into memory.</li>
+              <li>Your KPIs will be calculated on-the-fly based on your <code>kpis.yaml</code> contract.</li>
+            </ol>
+          </div>
         </div>
       )}
 

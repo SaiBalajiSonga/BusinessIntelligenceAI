@@ -1,0 +1,87 @@
+version: 1
+currency: USD
+calendar: month
+as_of: "2026-08-31"
+
+materiality:
+  min_impact_gbp: 10000     # e.g. a $10k drop in MRR is worth alerting on
+  min_action_impact_gbp: 2000
+
+baseline_calibration:
+  method: rolling_origin_backtest
+  window_weeks: 12
+
+causal:
+  method: difference_in_differences
+  specification: two_way_fixed_effects
+
+# ---------------------------------------------------------------- sources --
+
+sources:
+  billing:
+    path: data/raw/stripe_mrr.parquet
+    native_grain: [date, plan_tier, region, customer_segment]
+    refresh_cadence_hours: 24
+    sla_hours: 24
+    lineage: stripe.subscriptions
+    governance: governed
+
+  usage:
+    path: data/raw/product_telemetry.parquet
+    native_grain: [date, plan_tier, feature]
+    refresh_cadence_hours: 12
+    sla_hours: 12
+    lineage: segment.events
+    governance: loosely_governed
+
+# ------------------------------------------------------------- dimensions --
+
+dimensions:
+  region: {values: [US, EU, APAC], sliceable: true, entitlement_scoped: true}
+  plan_tier: {values: [Starter, Pro, Enterprise], sliceable: true}
+  customer_segment: {values: [SMB, MidMarket, Enterprise], sliceable: true}
+
+# -------------------------------------------------------------------- KPIs --
+
+kpis:
+  mrr:
+    label: Monthly Recurring Revenue (MRR)
+    tier: 1
+    unit: currency
+    view: monthly_subscriptions
+    expr: "sum(mrr_amount)"
+    direction: higher_is_better
+    sliceable_by: [region, plan_tier, customer_segment]
+    lineage: [billing]
+    impact_multipliers: []
+    materiality: {min_abs_delta: 15000, min_z: 2.0}
+    baseline: {method: stl, period_weeks: 12, min_history_weeks: 52}
+    children: [new_mrr, churn_mrr, expansion_mrr]
+
+  churn_mrr:
+    label: Churn MRR
+    tier: 1
+    unit: currency
+    view: monthly_subscriptions
+    expr: "sum(churn_amount)"
+    direction: lower_is_better
+    sliceable_by: [region, plan_tier, customer_segment]
+    lineage: [billing]
+    impact_multipliers: [-1]
+    materiality: {min_abs_delta: 5000, min_z: 2.5}
+    baseline: {method: stl, period_weeks: 12, min_history_weeks: 52}
+    children: []
+
+  dau_to_mau:
+    label: DAU / MAU Ratio
+    tier: 2
+    unit: ratio
+    view: daily_usage
+    expr: "sum(daily_active_users) / nullif(sum(monthly_active_users), 0)"
+    direction: higher_is_better
+    sliceable_by: [plan_tier]
+    lineage: [usage]
+    impact_multipliers: []
+    materiality: {min_abs_delta: 0.05, min_z: 1.5}
+    baseline: {method: simple_moving_average, period_weeks: 4}
+    children: []
