@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { BarChart3, Database, Users, Ruler, AlertTriangle, Lock } from "lucide-react";
 import type { Contract, Freshness } from "../types";
+
+const TAB_ICON: Record<string, typeof BarChart3> = {
+  kpis: BarChart3, sources: Database, personas: Users, confidence: Ruler,
+};
 
 export default function Governance() {
   const [contract, setContract] = useState<Contract | null>(null);
@@ -19,7 +24,7 @@ export default function Governance() {
   if (loading) return (
     <div className="loading-screen"><div className="spinner" /><div className="loading-text">Loading semantic contract…</div></div>
   );
-  if (error) return <div className="error-banner">⚠️ {error}</div>;
+  if (error) return <div className="error-banner"><AlertTriangle size={16} /> {error}</div>;
   if (!contract) return null;
 
   const kpis = Object.entries(contract.kpis ?? {});
@@ -33,15 +38,16 @@ export default function Governance() {
     count: "badge-neutral",
   };
 
-  const TIER_STYLE: Record<number, string> = {
-    1: "background: var(--brand-subtle); color: var(--brand)",
-    2: "background: var(--surface-3); color: var(--ink-2)",
-    3: "background: var(--surface-2); color: var(--muted)",
+  const TIER_STYLE: Record<number, React.CSSProperties> = {
+    1: { background: "var(--brand-subtle)", color: "var(--brand-text)" },
+    2: { background: "var(--surface-3)", color: "var(--ink-2)" },
+    3: { background: "var(--surface-2)", color: "var(--muted)" },
   };
 
   return (
     <div>
       <div className="page-header">
+        <div className="page-eyebrow">System of record</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
           <h1 className="page-title">Governance</h1>
           <span className="badge badge-neutral" style={{ fontSize: 11 }}>
@@ -58,15 +64,19 @@ export default function Governance() {
 
       {/* Tab bar */}
       <div className="seg" style={{ marginBottom: 20, display: "inline-flex" }}>
-        {(["kpis", "sources", "personas", "confidence"] as const).map((tab) => (
-          <button
-            key={tab}
-            aria-pressed={activeTab === tab}
-            onClick={() => setActiveTab(tab)}
-          >
-            {{ kpis: "📊 KPIs", sources: "🗄️ Sources", personas: "👥 Personas", confidence: "📐 Confidence" }[tab]}
-          </button>
-        ))}
+        {(["kpis", "sources", "personas", "confidence"] as const).map((tab) => {
+          const TabIcon = TAB_ICON[tab];
+          return (
+            <button
+              key={tab}
+              aria-pressed={activeTab === tab}
+              onClick={() => setActiveTab(tab)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <TabIcon size={13} /> {tab === "kpis" ? "KPIs" : tab[0].toUpperCase() + tab.slice(1)}
+            </button>
+          );
+        })}
       </div>
 
       {/* KPIs Tab */}
@@ -104,8 +114,8 @@ export default function Governance() {
                     <td>
                       <span style={{
                         fontSize: 11, fontWeight: 600, padding: "2px 6px", borderRadius: 4,
-                        ...(TIER_STYLE[kpi.tier] ? Object.fromEntries(TIER_STYLE[kpi.tier].split(";").map((s) => s.split(":").map((x) => x.trim()))) : {}),
-                      } as React.CSSProperties}>
+                        ...(TIER_STYLE[kpi.tier] ?? {}),
+                      }}>
                         Tier {kpi.tier}
                       </span>
                     </td>
@@ -125,7 +135,7 @@ export default function Governance() {
                     </td>
                     <td>
                       {kpi.restricted && (
-                        <span className="badge badge-neg">🔒 restricted</span>
+                        <span className="badge badge-neg"><Lock size={10} /> restricted</span>
                       )}
                     </td>
                   </tr>
@@ -239,7 +249,7 @@ export default function Governance() {
                       {p.masked_columns?.length > 0 ? (
                         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                           {p.masked_columns.map((c) => (
-                            <span key={c} className="badge badge-neg" style={{ fontSize: 10 }}>🔒 {c}</span>
+                            <span key={c} className="badge badge-neg" style={{ fontSize: 10 }}><Lock size={9} /> {c}</span>
                           ))}
                         </div>
                       ) : (
@@ -262,11 +272,13 @@ export default function Governance() {
             borderRadius: "var(--radius)",
             fontSize: 13,
             color: "var(--ink-2)",
+            display: "flex", alignItems: "flex-start", gap: 10,
           }}>
-            🔒 <strong style={{ color: "var(--ink)" }}>How entitlements are enforced:</strong>{" "}
+            <Lock size={14} style={{ color: "var(--brand-text)", marginTop: 2, flexShrink: 0 }} />
+            <span><strong style={{ color: "var(--ink)" }}>How entitlements are enforced:</strong>{" "}
             Each persona's region list is injected as a SQL <code>WHERE region IN (...)</code> clause before the first
             JOIN. The analysis never sees rows it shouldn't. Masked columns are excluded from the SELECT list.
-            There is no post-hoc text filtering.
+            There is no post-hoc text filtering.</span>
           </div>
         </div>
       )}
@@ -332,7 +344,7 @@ export default function Governance() {
               <div style={{
                 padding: "14px 16px",
                 borderRadius: "var(--radius-sm)",
-                border: "1px solid rgba(239,68,68,.3)",
+                border: `1px solid color-mix(in srgb, var(--abstain) 30%, transparent)`,
                 background: "var(--abstain-bg)",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>

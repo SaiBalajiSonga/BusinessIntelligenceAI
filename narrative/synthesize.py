@@ -26,6 +26,7 @@ from engine.confidence import ABSTAIN, Assessment, assess
 from engine.contract import Contract, load
 from engine.detect import FOCAL_WEEK, detect
 from engine.warehouse import connect
+from feedback.store import open_store
 from narrative.provider import LLM, TELEMETRY, Completion
 from narrative.validator import Validation, validate
 
@@ -172,22 +173,46 @@ class Narrative:
 
 # ------------------------------------------------------------- fallbacks --
 
+_CURRENCY_SYMBOLS = {"GBP": "£", "USD": "$", "EUR": "€"}
+
+
+def _money(amount: int, currency: str) -> str:
+    sym = _CURRENCY_SYMBOLS.get(currency, currency + " ")
+    sign = "-" if amount < 0 else ""
+    return f"{sign}{sym}{abs(amount):,}"
+
+
 def template_narrative(evidence: dict[str, Any]) -> str:
-    """Deterministic prose. Never wrong, never good. The floor, not the goal."""
+    """Deterministic prose. Never wrong, never good. The floor, not the goal —
+    used whenever no real LLM is configured, so it has to read as sentences,
+    not as the evidence dump it is built from."""
     e = evidence
-    top = e["drivers"][0] if e["drivers"] else None
+    cur = e["currency"]
+    named = [d for d in e["drivers"] if d["status"] != "unattributed"]
+    top, rest = (named[0], named[1:3]) if named else (None, [])
+
     parts = [
-        f"{e['kpi']} for {e['week']} came in {e['gap']:+,} {e['currency']} "
-        f"against expectation."
+        f"{e['kpi']} in {e['week']} came in {_money(e['gap'], cur)} against expectation."
+        if e["gap"] is not None else f"{e['kpi']} in {e['week']} could not be measured against expectation."
     ]
+
     if top:
-        parts.append(
-            f"The largest single contribution is {top['label']} at "
-            f"{top['amount']:+,} {e['currency']} ({top['status']})."
-        )
+        clause = f"The largest identified contribution is {top['label']}, at {_money(top['amount'], cur)}"
+        clause += f", owned by {top['owner'].replace('_', ' ')}" if top.get("owner") else ""
+        clause += "."
+        parts.append(clause)
+        if rest:
+            others = "; ".join(f"{d['label']} ({_money(d['amount'], cur)})" for d in rest)
+            parts.append(f"Also contributing: {others}.")
+    else:
+        parts.append("No individual driver has been named for this movement yet.")
+
+    if e["contradictions"]:
+        parts.append("This comes with a caveat: " + "; ".join(e["contradictions"]) + ".")
+
     parts.append(
-        f"Confidence is {e['confidence']['score']} ({e['confidence']['band']}), "
-        f"with coverage of {e['confidence']['coverage']}."
+        f"Confidence in this account is {e['confidence']['score']:.2f} ({e['confidence']['band']}), "
+        f"reflecting {e['confidence']['coverage']:.0%} coverage of the total movement by named causes."
     )
     return " ".join(parts)
 
@@ -220,6 +245,17 @@ def narrate(
             persona=persona_id, band=assessment.band,
             text=clarification_request(assessment, contract),
             source=ABSTENTION, evidence=evidence,
+        )
+
+    # No real provider configured (no API key). Rather than dress an offline
+    # echo up as an "LLM call" — which would misreport the LLM-vs-deterministic
+    # split the product exists to be honest about — go straight to the
+    # deterministic template and say so.
+    if llm.is_mock:
+        return Narrative(
+            persona=persona_id, band=assessment.band,
+            text=template_narrative(evidence), source=TEMPLATE_SOURCE,
+            evidence=evidence, validation=None,
         )
 
     system = PERSONA_PROMPTS[persona_id]
@@ -270,6 +306,7 @@ def main() -> None:
     contract = load()
     con = connect(contract=contract)
     llm = LLM(contract)
+    store = open_store()
 
     print(f"Narrative layer — {week}")
     print(f"provider {llm.provider.name} / {llm.model}   cache {len(llm.cache)} entries\n")
@@ -281,7 +318,7 @@ def main() -> None:
         if regions not in scopes:
             all_regions = set(contract.raw["dimensions"]["region"]["values"])
             filters = None if set(regions) == all_regions else {"region": list(regions)}
-            scopes[regions] = assess(con, contract, "net_revenue", week, filters)
+            scopes[regions] = assess(con, contract, "net_revenue", week, filters, store=store)
 
     for persona_id in ("cfo", "eu_category_manager", "analyst"):
         persona = contract.persona(persona_id)

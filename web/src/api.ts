@@ -86,6 +86,16 @@ export const fmt = {
   pct(v: number | null, digits = 0): string {
     return v === null || v === undefined ? "—" : `${(v * 100).toFixed(digits)}%`;
   },
+  /** Magnitude-aware compact currency: scales to K/M/B instead of always dividing by 1e6,
+   *  so a sub-£1M value like AOV doesn't render as "£0.00M". */
+  compact(v: number, symbol = "£"): string {
+    const abs = Math.abs(v);
+    const sign = v < 0 ? "−" : "";
+    if (abs >= 1e9) return `${sign}${symbol}${(abs / 1e9).toFixed(2)}B`;
+    if (abs >= 1e6) return `${sign}${symbol}${(abs / 1e6).toFixed(2)}M`;
+    if (abs >= 1e3) return `${sign}${symbol}${(abs / 1e3).toFixed(1)}K`;
+    return `${sign}${symbol}${abs.toLocaleString("en-GB", { maximumFractionDigits: 2 })}`;
+  },
   ms(v: number): string {
     return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`;
   },

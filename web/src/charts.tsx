@@ -65,7 +65,7 @@ export function Bridge({
                   stroke="var(--grid)" strokeWidth="1" />
             <text x={x(t)} y={H - AXIS + 16} textAnchor="middle"
                   fontSize="10.5" fill="var(--muted)">
-              {(t / 1e6).toFixed(2)}M
+              {fmt.compact(t, "")}
             </text>
           </g>
         ))}
@@ -151,6 +151,61 @@ export function ConfidenceBars({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- engine pipeline -- */
+/* The signature visual: makes "deterministic math first, LLM second" a thing
+   you SEE, not a sentence you read. Every stage and every millisecond here is
+   the real measured split — nothing is illustrative. */
+
+const STAGE_ICON: Record<string, string> = {
+  detect: "◆", reconcile: "▤", decompose: "▲", attribute: "◈",
+  causal: "∿", confidence: "◐", narrate: "✎",
+};
+
+function iconFor(name: string): string {
+  const key = name.toLowerCase();
+  for (const k of Object.keys(STAGE_ICON)) if (key.includes(k)) return STAGE_ICON[k];
+  return "○";
+}
+
+export function Pipeline({ split }: { split: Split }) {
+  const stages = split.stages;
+  const maxMs = Math.max(...stages.map((s) => s.ms), 1);
+
+  return (
+    <div className="pipeline">
+      <div className="pipeline-row">
+        {stages.map((s, i) => (
+          <div className="pipeline-stage" key={s.name}>
+            <div className="pipeline-node-wrap">
+              <div
+                className={`pipeline-node ${s.kind}`}
+                style={{ ["--h" as string]: `${18 + (s.ms / maxMs) * 26}px` }}
+                title={s.basis ?? s.name}
+              >
+                <span className="pipeline-node-icon">{iconFor(s.name)}</span>
+              </div>
+              {i < stages.length - 1 && (
+                <div className={`pipeline-link ${s.kind === "llm" || stages[i + 1].kind === "llm" ? "llm" : "det"}`} />
+              )}
+            </div>
+            <div className="pipeline-stage-name">{s.name}</div>
+            <div className="pipeline-stage-ms">{fmt.ms(s.ms)}</div>
+          </div>
+        ))}
+      </div>
+      <div className="pipeline-foot">
+        <span className="pipeline-foot-item">
+          <span className="dot" style={{ background: "var(--s1)" }} /> Deterministic {fmt.pct(1 - split.llm_share, 1)}
+        </span>
+        <span className="pipeline-foot-item">
+          <span className="dot" style={{ background: "var(--s2)" }} /> LLM {fmt.pct(split.llm_share, 1)}
+        </span>
+        <span className="pipeline-foot-item pipeline-foot-total">{fmt.ms(split.total_ms)} total</span>
+      </div>
     </div>
   );
 }

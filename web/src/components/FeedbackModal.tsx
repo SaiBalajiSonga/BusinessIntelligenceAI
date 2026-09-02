@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { toast } from "./Toast";
+import { Brain, Check, X, Pin, Ban, HelpCircle } from "lucide-react";
 import type { VerdictType } from "../types";
 
 interface Props {
@@ -14,12 +15,12 @@ interface Props {
   impact?: number;
 }
 
-const VERDICTS: { value: VerdictType; label: string; icon: string; desc: string }[] = [
-  { value: "correct",      label: "Confirmed",     icon: "✓", desc: "This driver and direction are right" },
-  { value: "wrong_driver", label: "Wrong Driver",   icon: "✗", desc: "Different driver caused this movement" },
-  { value: "known_cause",  label: "Known Cause",    icon: "📌", desc: "We already knew about this event" },
-  { value: "not_material", label: "Not Material",   icon: "~", desc: "Not worth acting on" },
-  { value: "unclear",      label: "Unclear",        icon: "?", desc: "Need more data to decide" },
+const VERDICTS: { value: VerdictType; label: string; icon: typeof Check; desc: string }[] = [
+  { value: "correct",      label: "Confirmed",     icon: Check, desc: "This driver and direction are right" },
+  { value: "wrong_driver", label: "Wrong Driver",   icon: X, desc: "Different driver caused this movement" },
+  { value: "known_cause",  label: "Known Cause",    icon: Pin, desc: "We already knew about this event" },
+  { value: "not_material", label: "Not Material",   icon: Ban, desc: "Not worth acting on" },
+  { value: "unclear",      label: "Unclear",        icon: HelpCircle, desc: "Need more data to decide" },
 ];
 
 export default function FeedbackModal({
@@ -46,7 +47,7 @@ export default function FeedbackModal({
         comment: comment || null,
         author: author || null,
       });
-      toast("Feedback recorded — learning loop updated", "success", "🧠");
+      toast("Feedback recorded — learning loop updated", "success");
       onClose();
       setVerdict(""); setCorrectDriver(""); setComment(""); setAuthor("");
     } catch (e: unknown) {
@@ -60,9 +61,9 @@ export default function FeedbackModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <span style={{ fontSize: 20 }}>🧠</span>
+          <Brain size={19} style={{ color: "var(--brand-text)" }} />
           <span className="modal-title">Analyst Feedback</span>
-          <button className="close-btn btn-ghost" onClick={onClose}>×</button>
+          <button className="close-btn btn-ghost" onClick={onClose} aria-label="Close"><X size={16} /></button>
         </div>
 
         <div className="modal-body">
@@ -81,33 +82,36 @@ export default function FeedbackModal({
           <div className="form-field">
             <div className="form-label">Verdict *</div>
             <div style={{ display: "grid", gap: 6 }}>
-              {VERDICTS.map((v) => (
-                <button
-                  key={v.value}
-                  onClick={() => setVerdict(v.value)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 14px",
-                    borderRadius: "var(--radius-sm)",
-                    border: `1px solid ${verdict === v.value ? "var(--brand)" : "var(--border)"}`,
-                    background: verdict === v.value ? "var(--brand-subtle)" : "var(--surface-2)",
-                    color: verdict === v.value ? "var(--brand)" : "var(--ink-2)",
-                    cursor: "pointer",
-                    font: "inherit",
-                    textAlign: "left",
-                    width: "100%",
-                    transition: "all 0.12s",
-                  }}
-                >
-                  <span style={{ fontSize: 16, width: 22, textAlign: "center" }}>{v.icon}</span>
-                  <span>
-                    <span style={{ display: "block", fontSize: 13, fontWeight: 500, color: "inherit" }}>{v.label}</span>
-                    <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{v.desc}</span>
-                  </span>
-                </button>
-              ))}
+              {VERDICTS.map((v) => {
+                const VIcon = v.icon;
+                return (
+                  <button
+                    key={v.value}
+                    onClick={() => setVerdict(v.value)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "10px 14px",
+                      borderRadius: "var(--radius-sm)",
+                      border: `1px solid ${verdict === v.value ? "var(--brand)" : "var(--border)"}`,
+                      background: verdict === v.value ? "var(--brand-subtle)" : "var(--surface-2)",
+                      color: verdict === v.value ? "var(--brand-text)" : "var(--ink-2)",
+                      cursor: "pointer",
+                      font: "inherit",
+                      textAlign: "left",
+                      width: "100%",
+                      transition: "all 0.12s",
+                    }}
+                  >
+                    <span style={{ width: 22, display: "flex", justifyContent: "center" }}><VIcon size={15} /></span>
+                    <span>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 500, color: "inherit" }}>{v.label}</span>
+                      <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{v.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

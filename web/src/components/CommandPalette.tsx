@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { LayoutDashboard, Search, Zap, Bot, Landmark, Bell, Users } from "lucide-react";
+import type { Persona } from "../types";
 
 interface CmdItem {
-  icon: string;
+  icon: ReactNode;
   label: string;
   hint?: string;
   action: () => void;
@@ -11,30 +14,32 @@ interface CmdItem {
 interface Props {
   open: boolean;
   onClose: () => void;
+  personas: Persona[];
+  onPersonaChange: (id: string) => void;
 }
 
-
-
-const PERSONA_ITEMS = [
-  { icon: "👔", label: "Switch to CFO", hint: "All regions", action: () => {} },
-  { icon: "🗂️", label: "Switch to EU Category Manager", hint: "DE, FR, NL only", action: () => {} },
-  { icon: "📈", label: "Switch to Data Analyst", hint: "Full detail", action: () => {} },
-];
-
-export default function CommandPalette({ open, onClose }: Props) {
+export default function CommandPalette({ open, onClose, personas, onPersonaChange }: Props) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   const NAV: CmdItem[] = [
-    { icon: "📊", label: "KPI Overview",           hint: "Home",           action: () => navigate("/") },
-    { icon: "🔍", label: "Root Cause Analysis",    hint: "Workspace",      action: () => navigate("/root-cause") },
-    { icon: "⚡", label: "Action Playbook",         hint: "What-if levers", action: () => navigate("/actions") },
-    { icon: "🤖", label: "Narrative Studio",        hint: "AI + Feedback",  action: () => navigate("/narrative") },
-    { icon: "🏛️", label: "Governance",              hint: "Contract",       action: () => navigate("/governance") },
-    { icon: "🔔", label: "Feedback & Learning",     hint: "Loop",           action: () => navigate("/feedback") },
+    { icon: <LayoutDashboard size={15} />, label: "KPI Overview",        hint: "Home",           action: () => navigate("/") },
+    { icon: <Bot size={15} />,             label: "The Story",           hint: "Narrative",      action: () => navigate("/investigation#story") },
+    { icon: <Search size={15} />,          label: "The Evidence",        hint: "Root cause",      action: () => navigate("/investigation#evidence") },
+    { icon: <Zap size={15} />,             label: "Next Steps",          hint: "Jump to actions", action: () => navigate("/investigation#actions") },
+    { icon: <Zap size={15} />,             label: "Full Action Playbook", hint: "Standalone view", action: () => navigate("/actions") },
+    { icon: <Landmark size={15} />,        label: "Governance",          hint: "Contract",       action: () => navigate("/governance") },
+    { icon: <Bell size={15} />,            label: "Feedback & Learning", hint: "Loop",           action: () => navigate("/feedback") },
   ];
+
+  const PERSONA_ITEMS: CmdItem[] = personas.map((p) => ({
+    icon: <Users size={15} />,
+    label: `Switch to ${p.label}`,
+    hint: p.regions.join(", "),
+    action: () => onPersonaChange(p.id),
+  }));
 
   const all = [...NAV, ...PERSONA_ITEMS];
   const filtered = query
@@ -75,7 +80,7 @@ export default function CommandPalette({ open, onClose }: Props) {
     <div className="cmd-overlay" onClick={onClose}>
       <div className="cmd-box" onClick={(e) => e.stopPropagation()}>
         <div className="cmd-input-wrap">
-          <span className="cmd-search-icon">🔍</span>
+          <Search size={18} />
           <input
             ref={inputRef}
             className="cmd-input"

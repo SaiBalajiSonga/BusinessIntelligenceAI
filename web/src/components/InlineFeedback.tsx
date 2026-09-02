@@ -89,11 +89,7 @@ export default function InlineFeedback({
           onClick={handleLike}
           title={state === "liked" ? "Unlike" : "Like"}
         >
-          <ThumbsUp 
-            size={16} 
-            strokeWidth={2} 
-             
-          />
+          <ThumbsUp size={16} strokeWidth={2} />
         </button>
         <div style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
         <button 
@@ -101,11 +97,7 @@ export default function InlineFeedback({
           onClick={handleDislike}
           title={state === "disliked" ? "Remove dislike" : "Dislike"}
         >
-          <ThumbsDown 
-            size={16} 
-            strokeWidth={2} 
-             
-          />
+          <ThumbsDown size={16} strokeWidth={2} />
         </button>
       </div>
 

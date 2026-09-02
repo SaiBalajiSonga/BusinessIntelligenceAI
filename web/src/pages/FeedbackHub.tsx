@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import { toast } from "../components/Toast";
+import {
+  Brain, BarChart3, Inbox, Pin, RotateCw, AlertTriangle,
+  Check, X, HelpCircle, Ban, Sparkles, MessageCircleWarning,
+} from "lucide-react";
 import type { FeedbackRecord, Learning } from "../types";
 
 interface Props { week: string; persona: string; }
 
-const VERDICT_STYLE: Record<string, { badge: string; icon: string }> = {
-  correct:       { badge: "badge-confident", icon: "?" },
-  wrong_driver:  { badge: "badge-neg",       icon: "?" },
-  missed_factor: { badge: "badge-warning",   icon: "??" },
-  hallucination: { badge: "badge-critical",  icon: "??" },
-  bad_tone:      { badge: "badge-neutral",   icon: "??" },
-  known_cause:   { badge: "badge-neutral",   icon: "??" },
-  not_material:  { badge: "badge-qualified", icon: "~" },
-  unclear:       { badge: "badge-neutral",   icon: "?" },
+const VERDICT_STYLE: Record<string, { badge: string; icon: typeof Check }> = {
+  correct:       { badge: "badge-confident", icon: Check },
+  wrong_driver:  { badge: "badge-neg",       icon: X },
+  missed_factor: { badge: "badge-warning",   icon: AlertTriangle },
+  hallucination: { badge: "badge-critical",  icon: Sparkles },
+  bad_tone:      { badge: "badge-neutral",   icon: MessageCircleWarning },
+  known_cause:   { badge: "badge-neutral",   icon: Pin },
+  not_material:  { badge: "badge-qualified", icon: Ban },
+  unclear:       { badge: "badge-neutral",   icon: HelpCircle },
 };
 
 export default function FeedbackHub({ week, persona }: Props) {
@@ -63,7 +67,7 @@ export default function FeedbackHub({ week, persona }: Props) {
         value: annValue || null,
         author: annAuthor || null,
       });
-      toast("Annotation added — engine will consider this in future runs", "success", "📌");
+      toast("Annotation added — engine will consider this in future runs", "success");
       setAnnLabel(""); setAnnStart(""); setAnnEnd(""); setAnnDimension(""); setAnnValue(""); setAnnAuthor("");
       load();
     } catch (e: unknown) {
@@ -76,7 +80,7 @@ export default function FeedbackHub({ week, persona }: Props) {
   if (loading) return (
     <div className="loading-screen"><div className="spinner" /><div className="loading-text">Loading feedback & learning state…</div></div>
   );
-  if (error) return <div className="error-banner">⚠️ {error}</div>;
+  if (error) return <div className="error-banner"><AlertTriangle size={16} /> {error}</div>;
 
   const rows = (feedbackData?.rows ?? []) as FeedbackRecord[];
   const byVerdict = feedbackData?.by_verdict ?? {};
@@ -85,6 +89,7 @@ export default function FeedbackHub({ week, persona }: Props) {
   return (
     <div>
       <div className="page-header">
+        <div className="page-eyebrow">Learning loop</div>
         <h1 className="page-title">Feedback & Learning</h1>
         <p className="page-sub">
           Analyst verdicts · Isotonic calibration · Driver prior updates · Business annotations
@@ -94,7 +99,7 @@ export default function FeedbackHub({ week, persona }: Props) {
       <div className="grid grid-2" style={{ gap: 20, marginBottom: 24 }}>
         {/* Learning Summary */}
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 14 }}>🧠 Learning Loop State</div>
+          <div className="card-title" style={{ marginBottom: 14 }}><Brain size={16} /> Learning Loop State</div>
           {learning ? (
             <>
               <dl className="kv-grid" style={{ marginBottom: 14 }}>
@@ -126,7 +131,7 @@ export default function FeedbackHub({ week, persona }: Props) {
             </>
           ) : (
             <div className="empty-state">
-              <div className="empty-state-icon">🧠</div>
+              <div className="empty-state-icon"><Brain size={36} /></div>
               <div className="empty-state-sub">No learning state yet — submit feedback to begin calibration</div>
             </div>
           )}
@@ -134,13 +139,13 @@ export default function FeedbackHub({ week, persona }: Props) {
 
         {/* Verdict Summary */}
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 14 }}>📊 Feedback Summary</div>
+          <div className="card-title" style={{ marginBottom: 14 }}><BarChart3 size={16} /> Feedback Summary</div>
           {total === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">📬</div>
+              <div className="empty-state-icon"><Inbox size={36} /></div>
               <div className="empty-state-title">No feedback yet</div>
               <div className="empty-state-sub">
-                Use the ✓/✗ buttons on insights and narratives to submit your first verdict.
+                Use the thumbs up / down buttons on insights and narratives to submit your first verdict.
               </div>
             </div>
           ) : (
@@ -150,12 +155,13 @@ export default function FeedbackHub({ week, persona }: Props) {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {Object.entries(byVerdict).map(([verdict, count]) => {
-                  const style = VERDICT_STYLE[verdict] ?? { badge: "badge-neutral", icon: "?" };
+                  const style = VERDICT_STYLE[verdict] ?? { badge: "badge-neutral", icon: HelpCircle };
+                  const VerdictIcon = style.icon;
                   const pct = total > 0 ? (count / total) * 100 : 0;
                   return (
                     <div key={verdict} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span className={`badge ${style.badge}`} style={{ width: 130, justifyContent: "center" }}>
-                        {style.icon} {verdict.replace(/_/g, " ")}
+                        <VerdictIcon size={11} /> {verdict.replace(/_/g, " ")}
                       </span>
                       <div style={{ flex: 1, height: 8, background: "var(--surface-3)", borderRadius: 4, overflow: "hidden" }}>
                         <div style={{
@@ -180,7 +186,7 @@ export default function FeedbackHub({ week, persona }: Props) {
 
       {/* Annotation Form */}
       <div className="card" style={{ marginBottom: 24 }}>
-        <div className="card-title" style={{ marginBottom: 4 }}>📌 Add Business Annotation</div>
+        <div className="card-title" style={{ marginBottom: 4 }}><Pin size={16} /> Add Business Annotation</div>
         <div className="card-sub" style={{ marginBottom: 16 }}>
           Known events the engine should be aware of — planned campaigns, system migrations, holidays.
           A known event is not an anomaly. The engine checks annotations before flagging.
@@ -248,8 +254,9 @@ export default function FeedbackHub({ week, persona }: Props) {
           className="btn btn-primary"
           onClick={submitAnnotation}
           disabled={submitting || !annLabel || !annStart}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
         >
-          {submitting ? "Saving…" : "📌 Add Annotation"}
+          {submitting ? "Saving…" : <><Pin size={13} /> Add Annotation</>}
         </button>
       </div>
 
@@ -262,11 +269,13 @@ export default function FeedbackHub({ week, persona }: Props) {
               Last {rows.length} of {total} records · net_revenue KPI
             </div>
           </div>
-          <button className="btn btn-sm" onClick={load}>↻ Refresh</button>
+          <button className="btn btn-sm" onClick={load} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <RotateCw size={13} /> Refresh
+          </button>
         </div>
         {rows.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">📭</div>
+            <div className="empty-state-icon"><Inbox size={36} /></div>
             <div className="empty-state-title">No feedback recorded yet</div>
             <div className="empty-state-sub">
               Submit verdicts from the Root Cause or Narrative pages to see them here.
@@ -288,7 +297,8 @@ export default function FeedbackHub({ week, persona }: Props) {
             </thead>
             <tbody>
               {[...rows].reverse().map((r) => {
-                const vs = VERDICT_STYLE[r.verdict] ?? { badge: "badge-neutral", icon: "?" };
+                const vs = VERDICT_STYLE[r.verdict] ?? { badge: "badge-neutral", icon: HelpCircle };
+                const VIcon = vs.icon;
                 return (
                   <tr key={r.id}>
                     <td style={{ fontSize: 11, fontFamily: "monospace", color: "var(--muted)" }}>
@@ -298,7 +308,7 @@ export default function FeedbackHub({ week, persona }: Props) {
                     <td style={{ fontSize: 12 }}>{r.persona?.replace(/_/g, " ")}</td>
                     <td>
                       <span className={`badge ${vs.badge}`}>
-                        {vs.icon} {r.verdict?.replace(/_/g, " ")}
+                        <VIcon size={10} /> {r.verdict?.replace(/_/g, " ")}
                       </span>
                     </td>
                     <td style={{ fontSize: 12, fontFamily: "monospace" }}>

@@ -234,6 +234,13 @@ class LLM:
     def model(self) -> str:
         return self.provider.model
 
+    @property
+    def is_mock(self) -> bool:
+        """True when no real provider is configured. Callers use this to avoid
+        labelling an offline echo as an 'LLM call' — the honesty the product
+        promises about LLM-vs-deterministic processing has to hold here too."""
+        return isinstance(self.provider, MockProvider)
+
     def complete(self, system: str, user: str, attempt: int = 1) -> Completion:
         key = PromptCache.key(self.provider.model, system, user, self.temperature)
         hit = self.cache.get(key)

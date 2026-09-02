@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import Loader from "../components/Loader";
-import { Cloud, Search, Database, Server, Component } from "lucide-react";
+import { Cloud, Search, Database, Server, Component, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 const CONNECTORS = [
   { id: "snowflake", name: "Snowflake", icon: <Cloud size={32} color="var(--brand)" />, desc: "Connect to your Snowflake Data Cloud" },
@@ -16,12 +16,14 @@ export default function Integrations() {
   const [selected, setSelected] = useState(CONNECTORS[0]);
   const [creds, setCreds] = useState({ host: "", database: "", user: "", password: "" });
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
   const testConnection = async () => {
     setStep("loading");
     setError(null);
     try {
-      await api.testIntegration({ engine: selected.id, ...creds });
+      const res = await api.testIntegration({ engine: selected.id, ...creds });
+      setResult(res);
       setStep("success");
     } catch (e: any) {
       setError(e.message || "Connection failed");
@@ -32,6 +34,7 @@ export default function Integrations() {
   return (
     <div>
       <div className="page-header">
+        <div className="page-eyebrow">Data connections</div>
         <h1 className="page-title">Data Integrations</h1>
         <p className="page-sub">Connect the engine directly to your Gold-tier data warehouse tables.</p>
       </div>
@@ -78,7 +81,7 @@ export default function Integrations() {
       {step === "configure" && (
         <div className="card" style={{ maxWidth: 500, margin: "0 auto" }}>
           <div className="card-title" style={{ marginBottom: 20 }}>Configure {selected.name} Connection</div>
-          {error && <div className="error-banner" style={{ marginBottom: 16 }}>?? {error}</div>}
+          {error && <div className="error-banner" style={{ marginBottom: 16 }}><AlertTriangle size={16} /> {error}</div>}
           
           <div className="form-field">
             <label className="form-label">Host URL</label>
@@ -109,13 +112,25 @@ export default function Integrations() {
       )}
 
       {step === "success" && (
-        <div className="card" style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>?</div>
-          <div className="card-title" style={{ marginBottom: 8 }}>Connection Successful!</div>
-          <p className="card-sub" style={{ marginBottom: 24 }}>
-            Successfully connected to {selected.name}. The engine introspected 14 dimensional tables and automatically generated the semantic <code>kpis.yaml</code> contract.
+        <div className="card" style={{ maxWidth: 520, margin: "0 auto", textAlign: "center" }}>
+          <CheckCircle2 size={44} style={{ color: "var(--confident)", marginBottom: 16 }} />
+          <div className="card-title" style={{ marginBottom: 8, justifyContent: "center" }}>Connection Successful</div>
+          <p className="card-sub" style={{ marginBottom: 20 }}>
+            {(result?.message as string) ?? `Connected to ${selected.name}.`}
           </p>
-          <button className="btn btn-primary" onClick={() => setStep("select")}>Finish Setup</button>
+          {result && (
+            <dl className="kv-grid" style={{ textAlign: "left", marginBottom: 24, gridTemplateColumns: "auto 1fr" }}>
+              {Object.entries(result)
+                .filter(([k]) => k !== "message")
+                .map(([k, v]) => (
+                  <div key={k} style={{ display: "contents" }}>
+                    <dt>{k.replace(/_/g, " ")}</dt>
+                    <dd>{Array.isArray(v) ? v.join(", ") : String(v)}</dd>
+                  </div>
+                ))}
+            </dl>
+          )}
+          <button className="btn btn-primary" onClick={() => { setStep("select"); setResult(null); }}>Finish Setup</button>
         </div>
       )}
     </div>

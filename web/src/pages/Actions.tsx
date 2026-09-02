@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { api, fmt } from "../api";
 import FeedbackModal from "../components/FeedbackModal";
+import {
+  Wrench, Search, ShieldAlert, Check, X, ChevronDown, ChevronUp,
+  Info, AlertCircle, Inbox, Zap,
+} from "lucide-react";
 import type { Actions, Recommendation } from "../types";
 
-interface Props { week: string; persona: string; }
-
-const KIND_ICON: Record<string, any> = {
-  corrective: <Wrench size={14} />,
-  instrumentation: <Search size={14} />,
+const KIND_ICON: Record<string, ReactNode> = {
+  corrective: <Wrench size={15} />,
+  instrumentation: <Search size={15} />,
 };
 
 const OWNER_AVATARS: Record<string, string> = {
@@ -68,7 +71,7 @@ function LeverSimulator({ rec, onImpactChange }: {
   );
 }
 
-function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; persona: string }) {
+export function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; persona: string }) {
   const [simImpact, setSimImpact] = useState(Math.abs(rec.contribution));
   const [expanded, setExpanded] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
@@ -80,7 +83,7 @@ function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; pe
           className={`action-card-icon ${rec.kind}`}
           title={rec.kind === "corrective" ? "Corrective action" : "Instrumentation"}
         >
-          {KIND_ICON[rec.kind] ?? "⚡"}
+          {KIND_ICON[rec.kind] ?? <Zap size={15} />}
         </div>
         <div style={{ flex: 1 }}>
           <div className="action-card-title">{rec.lever}</div>
@@ -156,11 +159,12 @@ function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; pe
             </div>
             {rec.monitoring.guardrail && (
               <div style={{
-                marginTop: 12, padding: "10px 14px",
-                background: "var(--warning-bg)", border: "1px solid rgba(245,158,11,.3)",
+                marginTop: 12, padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: 8,
+                background: "var(--warning-bg)", border: `1px solid color-mix(in srgb, var(--warning) 30%, transparent)`,
                 borderRadius: "var(--radius-sm)", fontSize: 12.5, color: "var(--ink-2)",
               }}>
-              <ShieldAlert size={14} style={{ color: "var(--warning)", marginRight: 6 }} /> <strong>Guardrail:</strong> {rec.monitoring.guardrail}
+                <ShieldAlert size={14} style={{ color: "var(--warning)", marginTop: 2, flexShrink: 0 }} />
+                <span><strong>Guardrail:</strong> {rec.monitoring.guardrail}</span>
               </div>
             )}
             {rec.assumptions.length > 0 && (
@@ -194,13 +198,13 @@ function RecCard({ rec, week, persona }: { rec: Recommendation; week: string; pe
   );
 }
 
-interface Props {
+interface PlaybookProps {
   week: string;
   persona: string;
   hideHeader?: boolean;
 }
 
-export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
+export default function ActionPlaybook({ week, persona, hideHeader }: PlaybookProps) {
   const [actions, setActions] = useState<Actions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -227,6 +231,7 @@ export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
     <div>
       {!hideHeader && (
         <div className="page-header">
+          <div className="page-eyebrow">Standalone view</div>
           <h1 className="page-title">Action Playbook</h1>
           <p className="page-sub">
             Recommended mitigations &middot; Expected impact bounds &middot; Guardrails &middot; Decision rights
@@ -262,7 +267,7 @@ export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
       <div style={{
         padding: "12px 16px",
         background: "var(--confident-bg)",
-        border: "1px solid rgba(16,185,129,.3)",
+        border: `1px solid color-mix(in srgb, var(--confident) 30%, transparent)`,
         borderRadius: "var(--radius)",
         marginBottom: 20,
         fontSize: 12.5,
@@ -270,8 +275,11 @@ export default function ActionPlaybook({ week, persona, hideHeader }: Props) {
         display: "flex",
         gap: 10,
       }}>
-        <Info size={16} style={{ flexShrink: 0, marginTop: 2 }} /> <span>Expected impact is <strong style={{ color: "var(--ink)" }}>computed from attributed contribution, never written by the model.</strong>
-        {" "}Each slider recalculates: <code>recovery = |contribution| × reversal_fraction</code>.</span></>
+        <Info size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+        <span>
+          Expected impact is <strong style={{ color: "var(--ink)" }}>computed from attributed contribution, never written by the model.</strong>
+          {" "}Each slider recalculates: <code>recovery = |contribution| × reversal_fraction</code>.
+        </span>
       </div>
 
       {corrective.length > 0 && (

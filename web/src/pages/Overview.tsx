@@ -1,7 +1,10 @@
 import Loader from "../components/Loader";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, fmt } from "../api";
-import type { Freshness, Movement, Telemetry } from "../types";
+import { Pipeline } from "../charts";
+import { AlertTriangle, TrendingUp, TrendingDown, Workflow, ArrowRight } from "lucide-react";
+import type { Freshness, Movement, Telemetry, Split } from "../types";
 
 interface Props {
   week: string;
@@ -12,6 +15,7 @@ export default function Overview({ week, persona }: Props) {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [freshness, setFreshness] = useState<Freshness[]>([]);
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
+  const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,11 +26,13 @@ export default function Overview({ week, persona }: Props) {
       api.movements(week, persona),
       api.freshness(),
       api.telemetry(),
+      api.split().catch(() => null),
     ])
-      .then(([m, f, t]) => {
+      .then(([m, f, t, sp]) => {
         setMovements(m.movements ?? []);
         setFreshness(f);
         setTelemetry(t);
+        setSplit(sp);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -37,7 +43,7 @@ export default function Overview({ week, persona }: Props) {
   );
 
   if (error) return (
-    <div className="error-banner">⚠️ {error}</div>
+    <div className="error-banner"><AlertTriangle size={16} /> {error}</div>
   );
 
   const material = movements.filter((m) => m.material);
@@ -46,11 +52,25 @@ export default function Overview({ week, persona }: Props) {
   return (
     <div>
       <div className="page-header">
+        <div className="page-eyebrow">Focal week {week}</div>
         <h1 className="page-title">KPI Overview</h1>
         <p className="page-sub">
-          {week} · {movements.length} KPIs tracked · {material.length} material movement{material.length !== 1 ? "s" : ""} detected
+          {movements.length} KPIs tracked · {material.length} material movement{material.length !== 1 ? "s" : ""} detected
         </p>
       </div>
+
+      {/* Signature hero: the actual measured engine pipeline for this run */}
+      {split && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header" style={{ marginBottom: 18 }}>
+            <div>
+              <div className="card-title"><Workflow size={16} /> How This Answer Was Produced</div>
+              <div className="card-sub">{split.interpretation}</div>
+            </div>
+          </div>
+          <Pipeline split={split} />
+        </div>
+      )}
 
       {/* Alert Banner */}
       {material.length > 0 && (
@@ -60,11 +80,11 @@ export default function Overview({ week, persona }: Props) {
           gap: 12,
           padding: "14px 18px",
           background: "var(--abstain-bg)",
-          border: "1px solid rgba(239,68,68,.3)",
+          border: `1px solid color-mix(in srgb, var(--abstain) 30%, transparent)`,
           borderRadius: "var(--radius)",
           marginBottom: 20,
         }}>
-          <span style={{ fontSize: 20 }}>🚨</span>
+          <AlertTriangle size={18} style={{ color: "var(--abstain)", flexShrink: 0 }} />
           <div>
             <div style={{ fontWeight: 600, fontSize: 13, color: "var(--abstain)" }}>
               {material.length} material movement{material.length > 1 ? "s" : ""} require attention
@@ -100,22 +120,30 @@ export default function Overview({ week, persona }: Props) {
               </div>
               <div className="kpi-tile-value" style={{ color: m.material ? "var(--neg)" : "var(--ink)" }}>
                 {m.unit === "currency"
-                  ? `£${(Math.abs(m.actual) / 1e6).toFixed(2)}M`
+                  ? fmt.compact(m.actual)
                   : m.unit === "ratio"
                   ? `${(m.actual * 100).toFixed(1)}%`
                   : m.actual.toLocaleString("en-GB")}
               </div>
               <div className="kpi-tile-delta">
-                <span className={isPos ? "delta-pos" : "delta-neg"}>
-                  {isPos ? "▲" : "▼"} {Math.abs(pct * 100).toFixed(1)}%
+                <span className={isPos ? "delta-pos" : "delta-neg"} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  {isPos ? <TrendingUp size={14} /> : <TrendingDown size={14} />} {Math.abs(pct * 100).toFixed(1)}%
                 </span>
                 <span style={{ color: "var(--muted)", fontSize: 11 }}>vs expected</span>
               </div>
+
+              <CompareBar actual={m.actual} expected={m.expected} isPos={isPos} />
+
               <div className="kpi-tile-foot">
                 <span className="has-tooltip" data-tooltip="Anomaly Score: How unusual this movement is compared to historical patterns (Z-score)">
                   Anomaly: {m.z.toFixed(2)}
                 </span> · {m.history_weeks}w history · {m.baseline_method}
               </div>
+              {m.kpi === "net_revenue" && (
+                <Link to="/investigation" className="kpi-tile-investigate">
+                  Investigate this <ArrowRight size={12} />
+                </Link>
+              )}
             </div>
           );
         })}
@@ -179,17 +207,17 @@ export default function Overview({ week, persona }: Props) {
                 <div className="card-sub">{telemetry.llm.provider} · {telemetry.llm.model}</div>
               </div>
               <span className="badge badge-neutral">
-                {(1 - telemetry.llm.calls / Math.max(telemetry.llm.calls + telemetry.analysis_cache.hits, 1) * 100).toFixed(0)}% cached
+                {fmt.pct(telemetry.analysis_cache.hit_rate, 0)} cached
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[
-                { label: "LLM Calls", value: String(telemetry.llm.calls), sub: `${telemetry.llm.cache_hits} cached` },
+                { label: "LLM Calls", value: String(telemetry.llm.calls), sub: `${telemetry.llm.live_calls} live, ${telemetry.llm.cache_hits} cached` },
                 { label: "Token Cost", value: `$${telemetry.llm.cost_usd.toFixed(4)}`, sub: "reference rate" },
                 { label: "Tokens In/Out", value: `${(telemetry.llm.input_tokens/1000).toFixed(1)}k / ${(telemetry.llm.output_tokens/1000).toFixed(1)}k`, sub: "prompt / completion" },
                 { label: "P50 Latency", value: fmt.ms(telemetry.llm.p50_latency_ms), sub: "LLM only", tooltip: "Median response time: 50% of requests are faster than this" },
-                { label: "Analysis Cache", value: fmt.pct(telemetry.analysis_cache.hit_rate, 0), sub: "hit rate", tooltip: "Percentage of requests served instantly from memory without waking the LLM" },
-                { label: "Cache Note", value: "7s cold", sub: "instant from cache" },
+                { label: "Analysis Cache", value: fmt.pct(telemetry.analysis_cache.hit_rate, 0), sub: `${telemetry.analysis_cache.hits} hits / ${telemetry.analysis_cache.misses} misses`, tooltip: "Percentage of requests served instantly from memory without waking the LLM" },
+                { label: "Cache Behaviour", value: telemetry.analysis_cache.note, sub: "", prose: true },
               ].map((s) => (
                 <div key={s.label} style={{
                   padding: "12px 14px",
@@ -197,15 +225,18 @@ export default function Overview({ week, persona }: Props) {
                   borderRadius: "var(--radius-sm)",
                   border: "1px solid var(--border)",
                 }}>
-                  <div 
+                  <div
                     style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}
                     className={s.tooltip ? "has-tooltip" : ""}
                     data-tooltip={s.tooltip}
                   >
                     {s.label}
                   </div>
-                  <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)", marginTop: 4 }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{s.sub}</div>
+                  <div style={s.prose
+                    ? { fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-2)", marginTop: 6 }
+                    : { fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)", marginTop: 4 }
+                  }>{s.value}</div>
+                  {s.sub && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{s.sub}</div>}
                 </div>
               ))}
             </div>
@@ -254,6 +285,22 @@ export default function Overview({ week, persona }: Props) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Real actual-vs-expected comparison, no invented series — a bar growing from
+ *  a fixed "expected" mark rather than a bare percentage, so a scan of the tile
+ *  grid reads magnitude at a glance. */
+function CompareBar({ actual, expected, isPos }: { actual: number; expected: number; isPos: boolean }) {
+  if (!expected) return null;
+  const ratio = actual / expected;
+  const clamped = Math.max(0.5, Math.min(1.5, ratio));
+  const width = ((clamped - 0.5) / 1.0) * 100;
+  return (
+    <div className="kpi-compare-track" title={`Actual ${fmt.abs(actual)} vs expected ${fmt.abs(expected)}`}>
+      <div className="kpi-compare-marker" />
+      <div className={`kpi-compare-fill ${isPos ? "pos" : "neg"}`} style={{ width: `${width}%` }} />
     </div>
   );
 }
