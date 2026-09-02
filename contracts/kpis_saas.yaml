@@ -14,6 +14,13 @@ baseline_calibration:
 causal:
   method: difference_in_differences
   specification: two_way_fixed_effects
+  pre_window_weeks: 12
+  parallel_trends:
+    max_contamination: 0.20
+    note: >
+      Same contamination-based gate as the retail contract: a pre-trend is
+      judged by how much of the estimated effect it could account for if
+      extrapolated across the post window, not by its p-value.
 
 # ---------------------------------------------------------------- sources --
 
@@ -85,3 +92,209 @@ kpis:
     materiality: {min_abs_delta: 0.05, min_z: 1.5}
     baseline: {method: simple_moving_average, period_weeks: 4}
     children: []
+
+  cac:
+    label: Customer Acquisition Cost (CAC)
+    tier: 2
+    unit: currency
+    view: monthly_subscriptions
+    expr: "sum(sales_marketing_spend) / nullif(sum(new_customers), 0)"
+    direction: lower_is_better
+    sliceable_by: [region, plan_tier]
+    lineage: [billing]
+    impact_multipliers: []
+    materiality: {min_abs_delta: 500, min_z: 2.0}
+    baseline: {method: simple_moving_average, period_weeks: 8}
+    children: []
+
+# -------------------------------------------------------------------- LLM --
+
+llm:
+  max_output_tokens: 500
+  temperature: 0.3
+  retry_on_validation_failure: 1
+
+  cache:
+    enabled: true
+    path: warehouse/llm_cache_saas.json
+    note: >
+      A separate cache file from the retail contract, so evidence from the two
+      verticals never collides on the same prompt key.
+
+  reference_pricing_usd_per_mtok:
+    input: 0.30
+    output: 0.60
+    note: Illustrative mid-market rates, not what we pay.
+
+  validator:
+    relative_tolerance: 0.005
+    allow_small_integers_up_to: 20
+    allow_years: [2000, 2100]
+
+# ---------------------------------------------------------- decomposition --
+#
+# The standard SaaS MRR waterfall: new business plus expansion, net of
+# contraction and churn. Same LMDI machinery as the retail contract's
+# net_revenue chain — a different vertical, not a different engine.
+
+decompositions:
+  mrr:
+    method: lmdi
+    view: monthly_subscriptions
+    identity: "new_mrr + expansion_mrr - contraction_mrr - churn_mrr = net_new_mrr"
+    chain:
+      - {factor: new_mrr,         label: New business, expr: "sum(new_mrr_amount)"}
+      - {factor: expansion_mrr,   label: Expansion,     expr: "sum(expansion_amount)"}
+      - {factor: contraction_mrr, label: Contraction,   expr: "sum(contraction_amount)"}
+      - {factor: churn_mrr,       label: Churn,         expr: "sum(churn_amount)"}
+
+# ------------------------------------------------------- driver candidates --
+
+drivers:
+  trial_conversion_rate:
+    label: Trial-to-paid conversion rate
+    type: controllable
+    source: usage
+    view: daily_usage
+    expr: "avg(trial_conversion_rate)"
+    lag_weeks: [0, 1]
+    owner_role: growth_lead
+
+  discount_pct:
+    label: Discount depth on new contracts
+    type: controllable
+    source: billing
+    view: monthly_subscriptions
+    expr: "avg(discount_pct)"
+    lag_weeks: [0, 1]
+    owner_role: revops_lead
+
+  support_response_hours:
+    label: Support response time
+    type: constraint
+    source: usage
+    view: daily_usage
+    expr: "avg(support_response_hours)"
+    lag_weeks: [0, 1]
+    freshness_caveat: true
+    owner_role: support_lead
+
+  competitor_pricing_index:
+    label: Competitor pricing
+    type: external
+    source: null                         # NOT INSTRUMENTED — deliberately
+    note: >
+      No feed for competitor SaaS pricing exists, mirroring the retail
+      contract's competitor_price_index. The engine cannot observe this driver
+      directly and must infer it from a control-group comparison or leave it
+      in the unexplained residual.
+    owner_role: pricing_council
+
+# ----------------------------------------------------------------- levers --
+
+levers:
+  trial_conversion_rate:
+    label: Trial conversion program
+    owner_role: growth_lead
+    decision_rights: onboarding-flow changes require product sign-off
+    scope: inherit
+    target: 0.28
+    horizon_weeks: 3
+    action: Adjust the {scope} onboarding flow to move trial conversion from {current} to {target}
+    monitoring:
+      metrics: [trial_conversion_rate, new_mrr]
+      cadence: weekly
+      horizon_days: 21
+      guardrail: halt if trial signups fall more than 8% week-on-week
+
+  discount_pct:
+    label: Contract discount depth
+    owner_role: revops_lead
+    decision_rights: discounts beyond 15% require Deal Desk approval
+    scope: inherit
+    target: 0.10
+    horizon_weeks: 2
+    action: Step {scope} discount depth from {current} to {target} over {weeks} weeks
+    monitoring:
+      metrics: [new_mrr, expansion_mrr]
+      cadence: weekly
+      horizon_days: 14
+      guardrail: halt if new logo count falls more than 10% week-on-week
+
+  support_response_hours:
+    label: Support staffing
+    owner_role: support_lead
+    decision_rights: headcount changes require support director sign-off
+    scope: inherit
+    target: 4.0
+    horizon_weeks: 3
+    action: Add {scope} support capacity, restoring response time from {current} to {target} hours
+    monitoring:
+      metrics: [support_response_hours, churn_mrr]
+      cadence: weekly
+      horizon_days: 21
+      guardrail: source is refreshed every 12h — confirm against the helpdesk before committing headcount
+
+  # Not a lever. There is nothing to pull, because the driver is not measured.
+  competitor_pricing_index:
+    label: Competitor pricing feed
+    owner_role: pricing_council
+    decision_rights: procurement approval for a third-party feed
+    kind: instrumentation
+    scope: portfolio
+    horizon_weeks: 6
+    action: Commission a competitor SaaS pricing feed for {scope} so this divergence can be
+      attributed rather than merely located
+    monitoring:
+      metrics: [churn_mrr, competitor_pricing_index]
+      cadence: weekly
+      horizon_days: 90
+      guardrail: re-run the control-group estimate once eight weeks of feed exist
+
+# --------------------------------------------------------------- personas --
+
+personas:
+  cfo:
+    label: Chief Financial Officer
+    regions: [US, EU, APAC]
+    masked_columns: []
+    max_detail: plan_tier
+    horizon: quarter
+
+  customer_success_manager:
+    label: Customer Success Manager (EU book)
+    regions: [EU]                        # row filter applied BEFORE any analysis
+    masked_columns: [cac]
+    max_detail: customer_segment
+    horizon: month
+
+  analyst:
+    label: Data Analyst
+    regions: [US, EU, APAC]
+    masked_columns: []
+    max_detail: customer_segment
+    horizon: month
+    show_method_detail: true
+
+# ------------------------------------------------------------- confidence --
+
+confidence:
+  weights:
+    coverage: 0.45
+    freshness: 0.15
+    history_depth: 0.15
+    method_strength: 0.15
+    contradiction: -0.20
+  bands:
+    confident: 0.75
+    qualified: 0.45
+
+# ------------------------------------------------------------ attribution --
+
+attribution:
+  method: adtributor
+  rank_by: surprise
+  divergence: jensen_shannon
+  min_explanatory_power: 0.02
+  max_depth: 3
+  top_n: 5

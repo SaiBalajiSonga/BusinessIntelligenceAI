@@ -8,6 +8,7 @@ accessors so the rest of the engine never reaches into raw dicts.
 from __future__ import annotations
 
 import functools
+import os
 import pathlib
 from typing import Any
 
@@ -89,7 +90,33 @@ class Contract:
         return self._raw["confidence"]
 
 
-@functools.lru_cache(maxsize=1)
-def load(path: pathlib.Path | str = CONTRACT_PATH) -> Contract:
-    with open(path) as fh:
+def active_contract_path() -> pathlib.Path:
+    """
+    Which contract file is active, resolved fresh on every call.
+
+    `KPI_CONTRACT_PATH` makes the vertical selectable — contracts/kpis_saas.yaml
+    exists precisely so a second vertical is a config choice, not decoration.
+    Defaulting to the retail path when the variable is unset keeps every
+    existing deployment's behaviour unchanged.
+    """
+    override = os.environ.get("KPI_CONTRACT_PATH", "").strip()
+    return pathlib.Path(override) if override else CONTRACT_PATH
+
+
+def load(path: pathlib.Path | str | None = None) -> Contract:
+    """
+    Load a contract, defaulting to whatever `KPI_CONTRACT_PATH` (or the retail
+    path) resolves to right now. The resolution happens here, OUTSIDE the
+    cache — caching on the unresolved `None` would freeze the very first
+    environment seen for the life of the process, and a later change to
+    `KPI_CONTRACT_PATH` (as tests that flip verticals rely on) would silently
+    keep returning the first contract ever loaded.
+    """
+    resolved = pathlib.Path(path) if path is not None else active_contract_path()
+    return _load_cached(str(resolved))
+
+
+@functools.lru_cache(maxsize=8)
+def _load_cached(path_str: str) -> Contract:
+    with open(path_str) as fh:
         return Contract(yaml.safe_load(fh))

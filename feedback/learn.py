@@ -66,12 +66,23 @@ class Calibration:
     brier_before: float | None = None
     brier_after: float | None = None
     note: str = ""
+    # the isotonic map's breakpoints, kept as plain lists so the fitted curve
+    # can be PERSISTED (learned_params holds JSON, not a pickled sklearn object)
+    # and re-applied from a different process via plain interpolation.
+    x_thresholds: list[float] = field(default_factory=list)
+    y_thresholds: list[float] = field(default_factory=list)
     _model: Any = None
 
     def apply(self, score: float) -> float:
-        if not self.fitted or self._model is None:
+        if not self.fitted:
             return score
-        return float(self._model.predict([score])[0])
+        if self._model is not None:
+            return float(self._model.predict([score])[0])
+        if self.x_thresholds and self.y_thresholds:
+            # np.interp clips to the boundary y outside the fitted range, the
+            # same behaviour as IsotonicRegression(out_of_bounds="clip")
+            return float(np.clip(np.interp(score, self.x_thresholds, self.y_thresholds), 0.0, 1.0))
+        return score
 
     @property
     def improvement(self) -> float | None:
@@ -114,6 +125,8 @@ def calibrate(store: Store, kpi: str | None = None) -> Calibration:
         brier_before=brier(scores, outcomes),
         brier_after=brier(model.predict(scores), outcomes),
         note="isotonic regression on analyst verdicts",
+        x_thresholds=model.X_thresholds_.tolist(),
+        y_thresholds=model.y_thresholds_.tolist(),
         _model=model,
     )
 
@@ -269,13 +282,24 @@ def learn(
 
 
 def persist(store: Store, learning: Learning, kpi: str) -> None:
-    """Write the learned state back as data, so it can be read and rolled back."""
+    """
+    Write the learned state back as data, so it can be read and rolled back.
+
+    This is what closes the loop: `engine.confidence.assess()` reads exactly
+    these rows (via `store.params("driver_prior")` / `store.params("calibration")`)
+    on its next call, so a later run behaves differently because of feedback
+    submitted here. The calibration curve's breakpoints are persisted too, not
+    just its diagnostics — without them a fresh process could report the Brier
+    improvement but could never actually reproduce the isotonic map.
+    """
     for driver, stats in learning.priors.items():
         store.save_param("driver_prior", f"{kpi}:{driver}", stats, int(stats["n"]))
     if learning.calibration.fitted:
         store.save_param("calibration", kpi, {
             "brier_before": learning.calibration.brier_before,
             "brier_after": learning.calibration.brier_after,
+            "x_thresholds": learning.calibration.x_thresholds,
+            "y_thresholds": learning.calibration.y_thresholds,
         }, learning.calibration.n)
     if learning.thresholds.get("proposed"):
         store.save_param("materiality", f"{kpi}:min_impact_gbp",

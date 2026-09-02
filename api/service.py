@@ -23,7 +23,7 @@ from engine.decompose import Decomposition, decompose
 from engine.detect import FOCAL_WEEK, Movement, detect
 from engine.levers import Recommendation, recommend
 from engine.warehouse import connect, freshness
-from feedback.learn import Learning, learn
+from feedback.learn import Learning, learn, persist
 from feedback.store import Store, open_store
 from narrative.provider import LLM
 from narrative.synthesize import Narrative, narrate
@@ -86,7 +86,8 @@ def movements_for(week: str, scope_key: tuple, scope: Any = None) -> list[Moveme
 
 @memoise
 def assessment_for(week: str, scope_key: tuple) -> Assessment:
-    return assess(con(), contract(), "net_revenue", week, dict(_unkey(scope_key)) or None)
+    return assess(con(), contract(), "net_revenue", week, dict(_unkey(scope_key)) or None,
+                  store=store())
 
 
 @memoise
@@ -116,6 +117,38 @@ def freshness_for() -> list[dict]:
     return freshness(con(), contract()).to_dict(orient="records")
 
 
+def introspect_sources() -> dict[str, Any]:
+    """
+    What `/v1/integrations/test` actually checks: for every source the ACTIVE
+    contract declares, does this DuckDB warehouse really hold the table it
+    claims to, and how many rows does it really have.
+
+    No external connector exists for Snowflake/BigQuery/Postgres/etc — this
+    reports the truth about the one warehouse the engine actually has access
+    to, rather than fabricating a response for whichever `engine` was posted.
+    """
+    from engine.warehouse import SOURCE_TABLES
+
+    cn = con()
+    c = contract()
+    found: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+
+    for source_id in c.sources:
+        table = SOURCE_TABLES.get(source_id)
+        if table is None:
+            missing.append({"source": source_id, "table": None,
+                            "reason": "no physical table is mapped for this source in this warehouse"})
+            continue
+        try:
+            n = cn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            found.append({"source": source_id, "table": table, "row_count": int(n)})
+        except Exception as e:
+            missing.append({"source": source_id, "table": table, "reason": str(e)})
+
+    return {"found": found, "missing": missing}
+
+
 def _unkey(scope_key: tuple) -> dict:
     return {k: (list(v) if isinstance(v, tuple) else v) for k, v in scope_key}
 
@@ -139,6 +172,29 @@ def learning_for(week: str, persona_id: str) -> Learning:
         current_threshold=float(contract().raw["materiality"]["min_impact_gbp"]),
         scope=scope_for(persona_id),
     )
+
+
+def relearn(kpi: str) -> Learning:
+    """
+    Close the loop: recompute calibration + driver priors from the feedback
+    recorded so far, PERSIST them (so they survive a restart and are visible as
+    plain data), and invalidate every cached assessment that could have used
+    the stale priors — otherwise a corrected driver prior would sit in the
+    store unread until the process cache happened to expire.
+
+    Called synchronously right after `POST /v1/feedback` records a row, so the
+    very next `assess()` — which reads the store via `assessment_for` — reflects
+    it immediately.
+    """
+    state = learn(
+        store(), kpi=kpi, iso_week=FOCAL_WEEK,
+        current_threshold=float(contract().raw["materiality"]["min_impact_gbp"]),
+    )
+    persist(store(), state, kpi)
+    assessment_for.cache_clear()
+    recommendations_for.cache_clear()
+    narrative_for.cache_clear()
+    return state
 
 
 _LLM: LLM | None = None
