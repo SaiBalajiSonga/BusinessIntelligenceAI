@@ -10,6 +10,8 @@ layer does the maths on.
 
 from __future__ import annotations
 
+import time
+
 import duckdb
 import pandas as pd
 
@@ -64,7 +66,7 @@ SOURCE_DATE_COLUMNS = {
 }
 
 
-def connect(rebuild: bool = False, contract: Contract | None = None) -> duckdb.DuckDBPyConnection:
+def connect(rebuild: bool = False, contract: Contract | None = None, _attempt: int = 0) -> duckdb.DuckDBPyConnection:
     """
     Open the warehouse read-only once it is built.
 
@@ -74,6 +76,17 @@ def connect(rebuild: bool = False, contract: Contract | None = None) -> duckdb.D
     after the build, so read-only is both the honest mode and the one that lets
     a server, a notebook and the tests share it. Only building takes the write
     lock, and feedback lives in its own file precisely so nothing else needs one.
+
+    `api/service.py` already serialises this within one process, but a
+    serverless deploy can run genuinely separate processes concurrently on a
+    cold-start burst (the frontend fires several requests in parallel on page
+    load), each with its own Python state and no shared lock. If two of them
+    both find the warehouse unbuilt and both open a writable handle, DuckDB
+    raises a TransactionException — "Catalog write-write conflict" — for
+    whichever loses the race. That's not corruption, it's just news that
+    another process is (or just finished) doing this build, so the right
+    response is to retry: close the failed handle and start over, which picks
+    up the now-built file on the read-only fast path above.
     """
     contract = contract or load()
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -90,10 +103,20 @@ def connect(rebuild: bool = False, contract: Contract | None = None) -> duckdb.D
         except duckdb.Error:
             pass        # not built yet, or a writer holds it — fall through
 
-    con = duckdb.connect(str(DB_PATH))
-    if not _is_built(con):
-        _build(con, contract)
-    return con
+    try:
+        con = duckdb.connect(str(DB_PATH))
+        if not _is_built(con):
+            _build(con, contract)
+        return con
+    except duckdb.Error:
+        try:
+            con.close()
+        except (UnboundLocalError, NameError):
+            pass    # the write-handle open itself is what failed
+        if _attempt >= 5:
+            raise
+        time.sleep(0.2 * (_attempt + 1))
+        return connect(rebuild=False, contract=contract, _attempt=_attempt + 1)
 
 
 def _is_built(con: duckdb.DuckDBPyConnection) -> bool:

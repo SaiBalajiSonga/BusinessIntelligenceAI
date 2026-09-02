@@ -31,6 +31,7 @@ from narrative.synthesize import Narrative, narrate
 _LOCAL = threading.local()
 _CONTRACT: Contract | None = None
 _ROOT_CON: duckdb.DuckDBPyConnection | None = None
+_ROOT_CON_LOCK = threading.Lock()
 
 
 def contract() -> Contract:
@@ -47,10 +48,23 @@ def con() -> duckdb.DuckDBPyConnection:
     DuckDB connections are not safe to share across threads, and uvicorn runs
     sync endpoints in a worker pool. `cursor()` hands back an independent handle
     onto the same database, which is the supported way to do this.
+
+    Building `_ROOT_CON` itself has to be locked, not just read: uvicorn
+    dispatches each request to its own worker thread, and the frontend fires
+    several requests in parallel on page load. On a cold start (`_ROOT_CON`
+    still `None`) an unlocked check-then-act here lets multiple threads all
+    see `None` and all call `connect()` at once -- each one independently
+    opens a writable handle on the same on-disk warehouse file and races to
+    build it, which is exactly the "Catalog write-write conflict" DuckDB
+    raises when two transactions try to create the same table at once. The
+    double-checked lock keeps that path single-flight while staying lock-free
+    on every request after the first.
     """
     global _ROOT_CON
     if _ROOT_CON is None:
-        _ROOT_CON = connect(contract=contract())
+        with _ROOT_CON_LOCK:
+            if _ROOT_CON is None:
+                _ROOT_CON = connect(contract=contract())
     handle = getattr(_LOCAL, "con", None)
     if handle is None:
         handle = _LOCAL.con = _ROOT_CON.cursor()
