@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Loader from "../components/Loader";
 import { SkeletonInvestigate } from "../components/Skeleton";
-import { api, fmt } from "../api";
+import { api, fmt, peek } from "../api";
 import { Bridge, ConfidenceBars, Pipeline } from "../charts";
 import InlineFeedback from "../components/InlineFeedback";
 import { RecCard } from "./Actions";
@@ -72,7 +72,7 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
   const [loading, setLoading] = useState(true);
   const [actionsLoading, setActionsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>(() => peek.personas() ?? []);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareData, setCompareData] = useState<Record<string, Narrative | "loading" | "error">>({});
 
@@ -85,13 +85,31 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
 
   useEffect(() => {
     let live = true;
-    setLoading(true);
-    setActionsLoading(true);
+
+    // Anything already fetched for this scenario stays on screen while the
+    // rest revalidates. Switching scenarios (or leaving and coming back) then
+    // costs nothing for a scenario that has been opened before, instead of
+    // replaying the whole pipeline wait.
+    const known = {
+      insight: peek.insight(week, persona, sku),
+      narrative: peek.narrative(week, persona, sku),
+      attribution: peek.attribution(week, persona, sku),
+      actions: peek.actions(week, persona, sku),
+      split: peek.split(),
+    };
+    const storyReady = !!(known.insight && known.narrative);
+
+    setLoading(!storyReady);
+    setActionsLoading(!known.actions);
     setError(null);
     setExpandedCause(null);
     setCompareOpen(false);
     setCompareData({});
-    setInsight(null); setNarrative(null); setActions(null); setAttribution(null); setSplit(null);
+    setInsight(known.insight ?? null);
+    setNarrative(known.narrative ?? null);
+    setActions(known.actions ?? null);
+    setAttribution(known.attribution ?? null);
+    setSplit(known.split ?? null);
 
     // The story, evidence and confidence sections only need these three — fetch
     // them as their own group so the page can render the instant they're back,

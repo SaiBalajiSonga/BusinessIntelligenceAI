@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, peek } from "../api";
 import { BarChart3, Database, Users, Ruler, AlertTriangle, Lock } from "lucide-react";
 import type { Contract, Freshness } from "../types";
 
@@ -8,9 +8,11 @@ const TAB_ICON: Record<string, typeof BarChart3> = {
 };
 
 export default function Governance() {
-  const [contract, setContract] = useState<Contract | null>(null);
-  const [freshness, setFreshness] = useState<Freshness[]>([]);
-  const [loading, setLoading] = useState(true);
+  // The contract is a static document for a given deploy, so a revisit should
+  // never wait on it again.
+  const [contract, setContract] = useState<Contract | null>(() => peek.contract() ?? null);
+  const [freshness, setFreshness] = useState<Freshness[]>(() => peek.freshness() ?? []);
+  const [loading, setLoading] = useState(() => !peek.contract());
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"kpis" | "sources" | "personas" | "confidence">("kpis");
 

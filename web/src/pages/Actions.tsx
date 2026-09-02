@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { api, fmt } from "../api";
+import { api, fmt, peek } from "../api";
 import FeedbackModal from "../components/FeedbackModal";
 import PersonaSwitcher from "../components/PersonaSwitcher";
 import {
@@ -208,16 +208,22 @@ interface PlaybookProps {
 }
 
 export default function ActionPlaybook({ week, persona, personas = [], onPersonaChange, hideHeader }: PlaybookProps) {
-  const [actions, setActions] = useState<Actions | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [actions, setActions] = useState<Actions | null>(() => peek.actions(week, persona) ?? null);
+  const [loading, setLoading] = useState(() => !peek.actions(week, persona));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
+    let live = true;
+    // Keep the previous view up while revalidating; only show the spinner when
+    // there is nothing cached for this (week, persona).
+    const known = peek.actions(week, persona);
+    if (known) setActions(known);
+    setLoading(!known);
     api.actions(week, persona)
-      .then(setActions)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .then((a) => live && setActions(a))
+      .catch((e) => live && setError(e.message))
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
   }, [week, persona]);
 
   if (loading) return (

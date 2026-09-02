@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, fmt } from "../api";
+import { api, fmt, peek } from "../api";
 import { Pipeline } from "../charts";
 import PersonaSwitcher from "../components/PersonaSwitcher";
 import Sparkline from "../components/Sparkline";
@@ -15,6 +15,17 @@ interface Props {
   onPersonaChange: (id: string) => void;
 }
 
+/** Sparkline histories already in cache, so the lines come back with the
+ *  tiles on a revisit rather than redrawing from empty. */
+function seededSeries(movements: Movement[] | undefined, persona: string, week: string): Record<string, number[]> {
+  const out: Record<string, number[]> = {};
+  (movements ?? []).forEach((m) => {
+    const s = peek.series(m.kpi, persona, week, 26);
+    if (s) out[m.kpi] = s.points.map((p) => p.value);
+  });
+  return out;
+}
+
 /** Formats a KPI value for its declared unit. */
 function kpiValue(m: Movement): string {
   if (m.unit === "currency") return fmt.compact(m.actual);
@@ -23,19 +34,31 @@ function kpiValue(m: Movement): string {
 }
 
 export default function Overview({ week, persona, personas, onPersonaChange }: Props) {
-  const [movements, setMovements] = useState<Movement[]>([]);
-  const [freshness, setFreshness] = useState<Freshness[]>([]);
-  const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
-  const [split, setSplit] = useState<Split | null>(null);
-  const [series, setSeries] = useState<Record<string, number[]>>({});
-  const [loading, setLoading] = useState(true);
+  // Seed from cache so returning to a page you have already opened renders
+  // immediately. Without this the page tore itself down to a skeleton and
+  // re-fetched numbers that, for a fixed week, cannot have changed.
+  const cached = peek.movements(week, persona);
+
+  const [movements, setMovements] = useState<Movement[]>(cached?.movements ?? []);
+  const [freshness, setFreshness] = useState<Freshness[]>(() => peek.freshness() ?? []);
+  const [telemetry, setTelemetry] = useState<Telemetry | null>(() => peek.telemetry() ?? null);
+  const [split, setSplit] = useState<Split | null>(() => peek.split() ?? null);
+  const [series, setSeries] = useState<Record<string, number[]>>(() => seededSeries(cached?.movements, persona, week));
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    setLoading(true);
+    const known = peek.movements(week, persona);
+    // Only blank the page when there is genuinely nothing to show for this
+    // (week, persona); a revisit keeps the last view on screen while it
+    // revalidates behind it.
+    setLoading(!known);
     setError(null);
-    setSeries({});
+    if (known) {
+      setMovements(known.movements ?? []);
+      setSeries(seededSeries(known.movements, persona, week));
+    }
     Promise.all([
       api.movements(week, persona),
       api.freshness(),

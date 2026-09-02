@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, fmt } from "../api";
+import { api, fmt, peek } from "../api";
 import { toast } from "../components/Toast";
 import PersonaSwitcher from "../components/PersonaSwitcher";
 import {
@@ -46,7 +46,17 @@ export default function FeedbackHub({ week, persona, personas = [], onPersonaCha
   const [submitting, setSubmitting] = useState(false);
 
   const load = () => {
-    setLoading(true);
+    // Submitting feedback invalidates these keys, so after a submit `peek`
+    // misses and this correctly falls back to a real load. On a plain revisit
+    // it hits, and the hub renders without blanking.
+    const known = {
+      feedback: peek.listFeedback(),
+      learning: peek.learning(week, persona),
+    };
+    if (known.feedback) setFeedbackData(known.feedback as typeof feedbackData);
+    if (known.learning) setLearning(known.learning);
+    setLoading(!(known.feedback && known.learning));
+
     Promise.all([
       api.listFeedback(),
       api.learning(week, persona),
