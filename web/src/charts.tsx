@@ -57,7 +57,7 @@ export function Bridge({
         <Key swatch="var(--axis)" label="Level" />
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" width="100%" height="auto"
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" width="100%" style={{ height: "auto", display: "block" }}
            aria-label={`Bridge from an expected ${fmt.abs(expected)} to an actual ${fmt.abs(actual)} ${currency}, decomposed into ${causes.length} contributions.`}>
         {ticks.map((t, i) => (
           <g key={i}>

@@ -52,11 +52,14 @@ export const api = {
   // Analysis
   movements: (week: string, persona: string) =>
     get<{ week: string; movements: Movement[] }>("movements", { week, persona }),
-  insight: (week: string, persona: string) => get<Insight>("insight", { week, persona }),
-  narrative: (week: string, persona: string) => get<Narrative>("narrative", { week, persona }),
-  actions: (week: string, persona: string) => get<Actions>("actions", { week, persona }),
-  attribution: (week: string, persona: string) =>
-    get<Attribution>("attribution", { week, persona }),
+  insight: (week: string, persona: string, sku?: string) =>
+    get<Insight>("insight", sku ? { week, persona, sku } : { week, persona }),
+  narrative: (week: string, persona: string, sku?: string) =>
+    get<Narrative>("narrative", sku ? { week, persona, sku } : { week, persona }),
+  actions: (week: string, persona: string, sku?: string) =>
+    get<Actions>("actions", sku ? { week, persona, sku } : { week, persona }),
+  attribution: (week: string, persona: string, sku?: string) =>
+    get<Attribution>("attribution", sku ? { week, persona, sku } : { week, persona }),
 
   // Feedback
   submitFeedback: (body: FeedbackIn) =>

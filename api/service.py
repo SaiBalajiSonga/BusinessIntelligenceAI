@@ -107,8 +107,7 @@ def recommendations_for(week: str, scope_key: tuple) -> list[Recommendation]:
 
 
 @memoise
-def narrative_for(week: str, persona_id: str) -> Narrative:
-    scope_key = _key(scope_for(persona_id))
+def narrative_for(week: str, scope_key: tuple, persona_id: str) -> Narrative:
     return narrate(_llm(), contract(), assessment_for(week, scope_key), persona_id)
 
 
@@ -258,7 +257,8 @@ def warm(week: str = FOCAL_WEEK) -> None:
             drill_for(week, scope_key)
             recommendations_for(week, scope_key)
 
-    n = timed("narrate", lambda: narrative_for(week, "cfo"), kind="llm")
+    cfo_scope_key = _key(scope_for("cfo"))
+    n = timed("narrate", lambda: narrative_for(week, cfo_scope_key, "cfo"), kind="llm")
 
     # a prompt-cache hit would understate the model's real cost, so prefer a
     # measured live call where one exists

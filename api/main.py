@@ -74,8 +74,23 @@ def _persona(persona: str) -> str:
     return persona
 
 
-def _scope_key(persona: str) -> tuple:
-    return service._key(service.scope_for(persona))
+def _scope_key(persona: str, sku: str | None = None) -> tuple:
+    """
+    A persona's entitlement scope, optionally narrowed to one SKU.
+
+    The narrowing is additive to entitlement, not a replacement for it — an
+    EU Category Manager who drills into a specific SKU still only sees it
+    within their own regions. This is what actually lets a caller reach the
+    sparse-history abstention path (`engine.confidence.assess` genuinely
+    returns ABSTAIN when net_revenue is scoped to a SKU with under 104 weeks
+    of history — see `tests/test_confidence.py::test_sparse_history_abstains_and_says_why`)
+    instead of that behaviour being provable only in a unit test and
+    unreachable through the API.
+    """
+    scope = service.scope_for(persona)
+    if sku:
+        scope = {**(scope or {}), "sku": [sku]}
+    return service._key(scope)
 
 
 def _week(week: str) -> str:
@@ -167,26 +182,35 @@ def movements(
 # ---------------------------------------------------------------- insight --
 
 @app.get("/v1/insight", tags=["analysis"])
-def insight(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
+def insight(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo"),
+            sku: str | None = Query(None, description="Narrow to one SKU, e.g. to reach the sparse-history abstention path")) -> dict:
     """
     The evidence object. Every number the narrative is allowed to use, with the
     rung and method that produced it.
     """
     _persona(persona)
     _week(week)
-    key = _scope_key(persona)
+    key = _scope_key(persona, sku)
     t = Timings()
 
     with t.track("assess (Rungs 0-5)"):
         a = service.assessment_for(week, key)
-    with t.track("decompose (Rungs 1-2)"):
-        d = service.decomposition_for(week, key)
+    d = None
+    if a.delta is not None:
+        # Only decompose when there's a real movement to decompose. Below the
+        # sparse-history floor `assess()` already abstains with delta=None —
+        # calling decompose() anyway would hit a view that doesn't carry a
+        # `sku` column at this grain (Sessions/Conversion aren't SKU-level
+        # concepts) and crash with a raw DuckDB binder error instead of the
+        # clean abstention the caller already has.
+        with t.track("decompose (Rungs 1-2)"):
+            d = service.decomposition_for(week, key)
 
     return {
         "kpi": a.kpi, "week": week, "currency": service.contract().currency,
         "gap": a.delta,
-        "actual": d.actual_revenue if a.delta is not None else None,
-        "expected": d.expected_revenue if a.delta is not None else None,
+        "actual": d.actual_revenue if d is not None else None,
+        "expected": d.expected_revenue if d is not None else None,
         "confidence": {
             "score": a.score, "band": a.band, "coverage": a.coverage,
             "components": a.components, "action": a.action,
@@ -202,7 +226,7 @@ def insight(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
         ],
         "contradictions": a.contradictions,
         "would_raise_confidence": list(dict.fromkeys(a.missing)),
-        "no_counterfactual": d.no_counterfactual,
+        "no_counterfactual": d.no_counterfactual if d is not None else [],
         "entitlement": {
             "persona": persona,
             "regions": service.contract().persona(persona)["regions"],
@@ -214,13 +238,13 @@ def insight(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
 
 
 @app.get("/v1/attribution", tags=["analysis"])
-def attribution(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
+def attribution(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo"), sku: str | None = Query(None)) -> dict:
     """Rung 3. Where it happened, ranked by surprise rather than size."""
     _persona(persona)
     _week(week)
     t = Timings()
     with t.track("drill (Rung 3)"):
-        levels = service.drill_for(week, _scope_key(persona))
+        levels = service.drill_for(week, _scope_key(persona, sku))
 
     return {
         "week": week, "persona": persona,
@@ -240,15 +264,21 @@ def attribution(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> d
 # ---------------------------------------------------------------- actions --
 
 @app.get("/v1/actions", tags=["analysis"])
-def actions(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
+def actions(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo"), sku: str | None = Query(None)) -> dict:
     """driver -> lever -> action -> expected impact -> owner -> confidence -> monitoring."""
     _persona(persona)
     _week(week)
-    key = _scope_key(persona)
+    key = _scope_key(persona, sku)
     t = Timings()
-    with t.track("levers"):
-        recs = service.recommendations_for(week, key)
-        a = service.assessment_for(week, key)
+    a = service.assessment_for(week, key)
+    recs: list = []
+    if a.delta is not None:
+        # Same reason as /v1/insight: below the sparse-history floor there's
+        # no movement to recommend levers for, and `recommend()` calls back
+        # into decompose() at SKU grain, which crashes for KPI views that
+        # don't carry a `sku` column — abstain first, never reach it.
+        with t.track("levers"):
+            recs = service.recommendations_for(week, key)
 
     recoverable = sum(r.expected_impact or 0 for r in recs)
     return {
@@ -279,18 +309,19 @@ def actions(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
 # -------------------------------------------------------------- narrative --
 
 @app.get("/v1/narrative", tags=["narrative"])
-def narrative(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
+def narrative(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo"), sku: str | None = Query(None)) -> dict:
     """
     Prose, and the receipt for it: which figures were checked, how many drafts
     were rejected, and whether the model was called at all.
     """
     _persona(persona)
     _week(week)
+    key = _scope_key(persona, sku)
     t = Timings()
     with t.track("assess (Rungs 0-5)"):
-        a = service.assessment_for(week, _scope_key(persona))
+        a = service.assessment_for(week, key)
     with t.track("narrate", kind="llm"):
-        n = service.narrative_for(week, persona)
+        n = service.narrative_for(week, key, persona)
 
     return {
         "week": week, "persona": persona, "band": n.band, "text": n.text,

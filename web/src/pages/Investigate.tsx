@@ -35,8 +35,8 @@ const SCENARIOS = [
   },
   {
     id: "abstain", icon: <OctagonAlert size={17} />, title: "Low Confidence",
-    sub: "Contradictory signals detected", week: "2026-W32", persona: "analyst",
-    desc: "Marketing conversions spike while POS transactions fall — a classic broken-tracking-pixel symptom. The engine refuses to guess.",
+    sub: "Under 12 weeks of history, drilled in", week: "2026-W32", persona: "analyst", sku: "HOME-NEW-01",
+    desc: "Scoped down to HOME-NEW-01 alone, there isn't even enough history to establish a baseline — not just a lower score, a genuine refusal to guess. The LLM is never called.",
   },
   {
     id: "entitlement", icon: <Lock size={17} />, title: "Role-Based Entitlement",
@@ -77,6 +77,7 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
   const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0];
   const week = scenario.week;
   const persona = scenario.persona;
+  const sku = "sku" in scenario ? scenario.sku : undefined;
 
   useEffect(() => { api.personas().then(setPersonas).catch(() => {}); }, []);
 
@@ -88,10 +89,10 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
     setCompareOpen(false);
     setCompareData({});
     Promise.all([
-      api.insight(week, persona),
-      api.narrative(week, persona),
-      api.actions(week, persona),
-      api.attribution(week, persona),
+      api.insight(week, persona, sku),
+      api.narrative(week, persona, sku),
+      api.actions(week, persona, sku),
+      api.attribution(week, persona, sku),
       api.split().catch(() => null),
     ])
       .then(([i, n, a, at, sp]) => {
@@ -129,7 +130,7 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
       personas.forEach((p) => {
         if (compareData[p.id]) return;
         setCompareData((d) => ({ ...d, [p.id]: "loading" }));
-        api.narrative(week, p.id)
+        api.narrative(week, p.id, sku)
           .then((n) => setCompareData((d) => ({ ...d, [p.id]: n })))
           .catch(() => setCompareData((d) => ({ ...d, [p.id]: "error" })));
       });
@@ -185,7 +186,7 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
                   {fmt.money(insight.gap, cur)}
                 </span>
                 <span className="hero-sub">
-                  vs expected {fmt.moneyRaw(insight.expected ?? 0)} · week {week}
+                  {insight.expected !== null ? `vs expected ${fmt.moneyRaw(insight.expected)} · ` : "no expectation established · "}week {week}
                 </span>
                 <span className={`badge ${BAND_BADGE[band]}`} style={{ marginLeft: "auto" }}>
                   {band === "confident" ? <CheckCircle2 size={12} /> : band === "abstain" ? <OctagonAlert size={12} /> : <AlertTriangle size={12} />}
