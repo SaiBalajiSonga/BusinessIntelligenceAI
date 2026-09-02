@@ -1,6 +1,6 @@
 import type {
   Actions, AnnotationIn, Attribution, Contract, FeedbackIn, Freshness,
-  Insight, Learning, Movement, Narrative, Persona, Split, Telemetry,
+  Insight, KpiSeries, Learning, Movement, Narrative, Persona, Split, Telemetry,
 } from "./types";
 
 const BASE = "/v1";
@@ -48,6 +48,8 @@ export const api = {
   telemetry: () => get<Telemetry>("telemetry"),
   split: () => get<Split>("processing-split"),
   contract: () => get<Contract>("contract"),
+  series: (kpi: string, persona: string, week: string, weeks = 26) =>
+    get<KpiSeries>("series", { kpi, persona, week, weeks: String(weeks) }),
 
   // Analysis
   movements: (week: string, persona: string) =>

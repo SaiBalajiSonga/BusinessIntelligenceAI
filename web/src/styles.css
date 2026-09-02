@@ -75,10 +75,28 @@
   --radius-sm:      8px;
   --radius:         12px;
   --radius-lg:      16px;
+  --radius-xl:      22px;
 
   /* Layout */
   --topbar-h:       64px;
   --content-w:      1360px;
+
+  /* Motion — one vocabulary, so nothing animates in its own dialect.
+     `--ease-out` for things arriving, `--ease-spring` for things responding
+     to a pointer, `--ease-in-out` for things changing in place. */
+  --ease-out:       cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-in-out:    cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:       120ms;
+  --dur:            220ms;
+  --dur-slow:       420ms;
+
+  /* Elevation used as meaning: raised = interactive, sunken = a container
+     for other things, not a thing itself. */
+  --lift:           0 10px 30px -12px rgba(28, 25, 23, 0.18), 0 3px 8px -4px rgba(28, 25, 23, 0.08);
+  --glow-brand:     0 0 0 1px color-mix(in srgb, var(--brand) 28%, transparent),
+                    0 8px 30px -10px color-mix(in srgb, var(--brand) 40%, transparent);
+  --sheen:          linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0));
 }
 
 [data-theme="dark"] {
@@ -134,6 +152,11 @@
   --shadow:         0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
   --shadow-md:      0 20px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border);
   --shadow-ring:    0 0 0 3px rgba(167, 139, 250, 0.28);
+
+  /* On a dark ground a drop shadow reads as dirt, so elevation is carried by
+     a brighter edge and a cast glow instead. */
+  --lift:           0 16px 40px -16px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--border-strong);
+  --sheen:          linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0));
 }
 
 /* ---------------------------------------------------- Reset -- */
@@ -202,6 +225,32 @@ a { color: inherit; }
 
 .topbar-spacer { flex: 1; }
 
+.topbar-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: var(--content-w);
+  margin: 0 auto;
+  padding: 12px 40px;
+}
+
+.topbar-brand { display: flex; align-items: center; gap: 11px; flex-shrink: 0; }
+
+.topbar-mobile-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 24px 16px;
+  border-top: 1px solid var(--border);
+  animation: riseIn var(--dur) var(--ease-out);
+}
+
+@media (max-width: 720px) {
+  .topbar-row { padding: 10px 20px; }
+  .topbar-week { display: none; }
+}
+
 .topbar-cmd-btn {
   display: flex;
   align-items: center;
@@ -230,9 +279,15 @@ kbd {
   color: var(--muted);
 }
 
+/* Nav sits inline with the brand on a single row. The old two-row bar
+   spent ~110px of vertical space before any content began. */
 .nav-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 99px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -242,19 +297,29 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  font-size: 13.5px;
+  padding: 7px 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-2);
-  border-bottom: 2px solid transparent;
+  border-radius: 99px;
   text-decoration: none;
   white-space: nowrap;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
 }
-.nav-tab:hover { color: var(--ink); }
-.nav-tab.active { color: var(--brand-text); border-bottom-color: var(--brand); }
+.nav-tab:hover { color: var(--ink); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.nav-tab.active {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
 
 button.mobile-nav-toggle { display: none; }
+
+@media (max-width: 940px) {
+  .topbar-nav-inline { display: none; }
+  button.mobile-nav-toggle { display: inline-flex; }
+}
 
 /* -------------------------------------------- Main Content -- */
 
@@ -1543,3 +1608,303 @@ figure { margin: 0; }
   font-weight: 700;
   flex-shrink: 0;
 }
+
+/* ============================================================
+   MOTION SYSTEM
+   Motion here is informational, not decorative: things enter in the
+   order they are meant to be read, and respond when they can be acted
+   on. Anything that would move purely for effect is left still.
+   ============================================================ */
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+@keyframes drawLine {
+  from { stroke-dashoffset: var(--dash, 1000); }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Reveal-on-mount. `--i` staggers a group so a grid resolves in reading
+   order instead of flashing in all at once. */
+.reveal {
+  animation: riseIn var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+.reveal-scale {
+  animation: scaleIn var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* Route changes share one transition, so pages read as surfaces of the
+   same app rather than separate documents. */
+.page-enter { animation: riseIn 320ms var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   SKELETONS
+   A spinner says "something is happening". A skeleton says "this much
+   is coming, and it will land here" — which is what stops the layout
+   jumping when it does.
+   ============================================================ */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--surface-3) 70%, var(--surface-2)) 37%,
+    var(--surface-2) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-line { height: 11px; margin-bottom: 9px; }
+.skeleton-line:last-child { margin-bottom: 0; }
+.skeleton-title { height: 26px; width: 45%; margin-bottom: 14px; }
+
+/* ============================================================
+   ELEVATED CARD BEHAVIOUR
+   ============================================================ */
+
+.card {
+  transition: transform var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out);
+}
+
+/* Only cards that actually do something on click get the lift — a static
+   panel that rises under the pointer is a promise the UI cannot keep. */
+.card-interactive { cursor: pointer; }
+.card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--lift);
+  border-color: var(--border-strong);
+}
+.card-interactive:active { transform: translateY(-1px); }
+
+/* ============================================================
+   KPI GRID — flex, not grid, so the final row fills.
+   A `repeat(N, 1fr)` grid leaves a hole whenever the KPI count is not a
+   multiple of N, and that count is not fixed: it changes with the
+   persona's entitlement. Letting the last row grow keeps the block
+   rectangular at any count.
+   ============================================================ */
+
+.kpi-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+
+.kpi-card {
+  /* 340px basis puts exactly three per row at the 1280px content width and
+     two below ~1050px. Cards still grow to close the last row, so the block
+     stays rectangular whatever the persona's KPI count turns out to be. */
+  flex: 1 1 340px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out);
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--lift);
+  border-color: var(--border-strong);
+}
+
+/* Material movements are the point of the page, so they carry a coloured
+   edge rather than a heavier fill — legible at a glance across the grid
+   without turning every card into a warning. */
+.kpi-card.is-material { border-color: color-mix(in srgb, var(--neg) 32%, var(--border)); }
+.kpi-card.is-material::before {
+  content: "";
+  position: absolute; inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--neg);
+}
+
+.kpi-card-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+  min-height: 20px;
+}
+
+.kpi-card-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi-card-value {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-card-delta {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-card-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sparkline bleeds to the card edges: it is the card floor, not a
+   widget parked on it. */
+.kpi-card-spark { margin: 14px -20px 0; height: 46px; position: relative; }
+
+/* ---- hero: the tier-1 KPI gets real estate, the rest get a row ---- */
+.kpi-hero {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) 1.6fr;
+  gap: 28px;
+  align-items: stretch;
+  padding: 26px 28px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--brand) 9%, transparent), transparent 60%),
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.kpi-hero-left { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+
+.kpi-hero-value {
+  font-size: 46px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+.kpi-hero-spark { min-width: 0; display: flex; align-items: flex-end; }
+
+@media (max-width: 900px) {
+  .kpi-hero { grid-template-columns: 1fr; gap: 20px; }
+}
+
+/* ============================================================
+   SPARKLINE
+   ============================================================ */
+
+.spark-wrap { position: relative; width: 100%; }
+.spark { display: block; width: 100%; }
+.spark-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.spark-line.animate { animation: drawLine 900ms var(--ease-out) backwards; }
+
+/* Positioned as HTML, not drawn in the SVG, so the non-uniform viewBox
+   scale cannot flatten it into an ellipse. */
+.spark-dot {
+  position: absolute;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2.5px var(--surface);
+  animation: scaleIn var(--dur) var(--ease-spring) 700ms backwards;
+}
+
+/* ============================================================
+   COMPACT TILE GRID  (connectors, small stats)
+   ============================================================ */
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: transform var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out);
+}
+
+.tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--lift);
+  border-color: var(--border-strong);
+}
+
+.tile-icon {
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Declared block so the name and sub stack even when the markup uses spans
+   (a <button> may not contain a <div> in valid HTML). */
+.tile-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.tile-name { display: block; font-size: 13.5px; font-weight: 650; color: var(--ink); }
+.tile-sub {
+  display: block;
+  font-size: 11.5px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The tile is also used as a <button>, which brings its own chrome. */
+button.tile { font: inherit; width: 100%; }
+
+/* ============================================================
+   DETAIL FIXES
+   ============================================================ */
+
+/* "Tier 1" was wrapping to two lines inside its own badge. */
+.badge, .tag, .pill { white-space: nowrap; }
+
+/* Table headers were breaking mid-label ("MIN / Z"). */
+.data-table th { white-space: nowrap; }

@@ -197,6 +197,50 @@ def test_no_endpoint_leaks_a_masked_kpis_real_value():
     evidence.pop("entitlement", None)   # legitimate disclosure of what's withheld, not a leak
     assert "gross_margin_pct" not in str(evidence)
 
+    # /v1/series hands back raw weekly values, so an unenforced mask here would
+    # leak the exact figure every other endpoint withholds.
+    s = client.get("/v1/series", params={**params, "kpi": "gross_margin_pct"})
+    assert s.status_code == 403
+
+
+def test_series_returns_real_history_bounded_at_the_focal_week():
+    """
+    The sparkline history has to be the same series the baseline is fitted on,
+    and must stop at the focal week: the warehouse holds later weeks, and
+    drawing those would put data the analysis never saw into a chart captioned
+    as its history.
+    """
+    body = client.get("/v1/series", params={"kpi": "net_revenue", "persona": "cfo", "week": WEEK}).json()
+
+    assert body["kpi"] == "net_revenue"
+    assert len(body["points"]) > 1
+    weeks = [p["iso_week"] for p in body["points"]]
+    assert weeks == sorted(weeks), "points must be in chronological order"
+    assert max(weeks) <= WEEK, "history must not run past the week being analysed"
+
+    # the last point is the actual the rest of the page reports for that week
+    movements = client.get("/v1/movements", params={"week": WEEK, "persona": "cfo"}).json()
+    net = next(m for m in movements["movements"] if m["kpi"] == "net_revenue")
+    assert body["points"][-1]["value"] == pytest.approx(net["actual"], rel=1e-6)
+
+
+def test_series_is_entitlement_scoped_not_just_filtered_for_display():
+    """
+    Two personas with different regions must get genuinely different numbers,
+    the same way every other endpoint does — otherwise the sparkline would be
+    drawing the whole portfolio under a scoped persona's name.
+    """
+    cfo = client.get("/v1/series", params={"kpi": "net_revenue", "persona": "cfo", "week": WEEK}).json()
+    eu = client.get("/v1/series", params={"kpi": "net_revenue", "persona": "eu_category_manager", "week": WEEK}).json()
+
+    assert eu["points"][-1]["value"] < cfo["points"][-1]["value"], \
+        "a three-region persona must see less revenue than the whole portfolio"
+
+
+def test_series_refuses_a_kpi_the_contract_does_not_define():
+    r = client.get("/v1/series", params={"kpi": "not_a_real_kpi", "persona": "cfo"})
+    assert r.status_code == 404
+
 
 def test_the_drill_reaches_the_planted_stockout():
     body = client.get("/v1/attribution", params={"week": WEEK, "persona": "cfo"}).json()

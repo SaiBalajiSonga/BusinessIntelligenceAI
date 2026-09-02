@@ -130,6 +130,15 @@ export interface Telemetry {
 export interface DrillStep { dimension: string; chosen: string | null }
 export interface Attribution { path: DrillStep[] }
 
+/** A KPI's measured weekly history, entitlement-scoped, bounded at the focal week. */
+export interface KpiSeries {
+  kpi: string;
+  label: string;
+  unit: string;
+  persona: string;
+  points: { iso_week: string; value: number }[];
+}
+
 // --- New types for additional endpoints ---
 
 export interface Movement {

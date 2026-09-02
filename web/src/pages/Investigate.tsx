@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Loader from "../components/Loader";
+import { SkeletonInvestigate } from "../components/Skeleton";
 import { api, fmt } from "../api";
 import { Bridge, ConfidenceBars, Pipeline } from "../charts";
 import InlineFeedback from "../components/InlineFeedback";
@@ -170,10 +171,11 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
       </div>
 
       <div className="scenario-grid">
-        {SCENARIOS.map((s) => (
+        {SCENARIOS.map((s, i) => (
           <button
             key={s.id}
-            className={`scenario-card${scenarioId === s.id ? " active" : ""}`}
+            className={`scenario-card reveal${scenarioId === s.id ? " active" : ""}`}
+            style={{ ["--i" as string]: i }}
             onClick={() => setScenarioId(s.id)}
           >
             <span className="scenario-card-icon">{s.icon}</span>
@@ -183,7 +185,7 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
         ))}
       </div>
 
-      {loading && <Loader text="Running the analytical pipeline..." />}
+      {loading && <SkeletonInvestigate />}
       {error && <div className="error-banner"><AlertTriangle size={16} /> {error}</div>}
 
       {insight && narrative && !loading && (

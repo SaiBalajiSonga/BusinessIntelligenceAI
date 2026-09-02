@@ -20,7 +20,7 @@ from engine.attribute import drill
 from engine.confidence import Assessment, assess
 from engine.contract import Contract, load
 from engine.decompose import Decomposition, decompose
-from engine.detect import FOCAL_WEEK, Movement, detect
+from engine.detect import FOCAL_WEEK, Movement, detect, weekly_series
 from engine.levers import Recommendation, recommend
 from engine.warehouse import connect, freshness
 from feedback.learn import Learning, learn, persist
@@ -128,6 +128,30 @@ def narrative_for(week: str, scope_key: tuple, persona_id: str) -> Narrative:
 @memoise
 def freshness_for() -> list[dict]:
     return freshness(con(), contract()).to_dict(orient="records")
+
+
+@memoise
+def series_for(kpi: str, scope_key: tuple, weeks: int, through: str) -> list[dict]:
+    """
+    The KPI's own weekly history up to and including `through`.
+
+    This is the same series `detect()` fits its baseline on — read straight off
+    the warehouse rather than recomputed — so a sparkline drawn from it is the
+    actual measured history, not a decorative approximation of one.
+
+    The warehouse holds weeks beyond the focal one, and drawing those would put
+    data the analysis never saw into a chart captioned as its history. Cutting
+    at `through` keeps the line and the reasoning describing the same weeks.
+    """
+    df = weekly_series(con(), contract(), kpi, dict(_unkey(scope_key)) or None)
+    if df.empty:
+        return []
+    df = df[df["iso_week"] <= through]      # ISO year-week strings sort chronologically
+    tail = df.tail(weeks)
+    return [
+        {"iso_week": str(r.iso_week), "value": float(r.value)}
+        for r in tail.itertuples()
+    ]
 
 
 def introspect_sources() -> dict[str, Any]:

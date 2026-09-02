@@ -36,18 +36,30 @@ function TopNav({
 }) {
   const location = useLocation();
 
+  const isActive = (to: string) =>
+    to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
+
   return (
-    <header className="topbar" style={{ display: 'flex', flexDirection: 'column', height: 'auto', padding: 0 }}>
-      {/* Upper bar: Brand & Controls */}
-      <div className="topbar-row" style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 32px', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+    <header className="topbar">
+      {/* One row: brand, nav, controls. The previous two-row bar spent
+          ~110px of vertical space before any content began. */}
+      <div className="topbar-row">
+        <div className="topbar-brand">
           <div className="brand-mark"><Activity size={16} /></div>
-          <div className="sidebar-brand-text" style={{ fontSize: '15px' }}>KPI Intelligence</div>
+          <div className="sidebar-brand-text">KPI Intelligence</div>
         </div>
 
-        <span className="topbar-week">{week}</span>
+        <nav className="nav-tabs topbar-nav-inline">
+          {NAV.map((item) => (
+            <NavLink key={item.to} to={item.to} className={`nav-tab${isActive(item.to) ? " active" : ""}`}>
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
 
         <div className="topbar-spacer" />
+
+        <span className="topbar-week">{week}</span>
 
         <button className="topbar-cmd-btn" onClick={onCmdOpen}>
           <Search size={14} /> <span className="cmd-btn-label">Search</span> <kbd>⌘K</kbd>
@@ -62,37 +74,36 @@ function TopNav({
         </button>
       </div>
 
-      {/* Lower bar: Navigation Tabs */}
-      <nav className="nav-tabs" style={{ padding: '0 32px' }}>
-        {NAV.map(item => {
-          const active = item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
-          return (
-            <NavLink key={item.to} to={item.to} className={`nav-tab${active ? " active" : ""}`}>
+      {mobileOpen && (
+        <nav className="topbar-mobile-nav">
+          {NAV.map((item) => (
+            <NavLink key={item.to} to={item.to} className={`nav-tab${isActive(item.to) ? " active" : ""}`}>
               {item.label}
             </NavLink>
-          );
-        })}
-      </nav>
-
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <nav style={{ display: 'flex', flexDirection: 'column', padding: '8px 20px 16px', borderTop: '1px solid var(--border)' }}>
-          {NAV.map(item => {
-            const active = item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
-            return (
-              <NavLink key={item.to} to={item.to} className={`nav-tab${active ? " active" : ""}`} style={{ padding: '12px 4px', borderBottom: 'none' }}>
-                {item.label}
-              </NavLink>
-            );
-          })}
+          ))}
         </nav>
       )}
     </header>
   );
 }
 
+/**
+ * Start from the viewer's own setting: a saved choice if they have made one,
+ * otherwise whatever the OS asks for. Hardcoding dark meant a light-mode
+ * machine got a dark flash on every single load.
+ */
+function initialTheme(): "dark" | "light" {
+  try {
+    const saved = localStorage.getItem("kpi-theme");
+    if (saved === "dark" || saved === "light") return saved;
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch {
+    return "dark";      // private mode, or storage blocked
+  }
+}
+
 function AppShell() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">(initialTheme);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [persona, setPersona] = useState("cfo");
@@ -100,7 +111,10 @@ function AppShell() {
   const [freshness, setFreshness] = useState<Freshness[]>([]);
   const location = useLocation();
 
-  useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try { localStorage.setItem("kpi-theme", theme); } catch { /* storage blocked */ }
+  }, [theme]);
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   useEffect(() => {
@@ -135,7 +149,9 @@ function AppShell() {
       />
 
       <main className="main-content">
-        <div className="content-frame">
+        {/* Keyed on the path so a route change replays the entrance — without
+            it React reuses the DOM and the new page simply blinks into place. */}
+        <div className="content-frame page-enter" key={location.pathname}>
           <Routes>
             <Route path="/" element={<Overview week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />} />
             <Route path="/investigation" element={<Investigate week={FOCAL_WEEK} persona={persona} />} />

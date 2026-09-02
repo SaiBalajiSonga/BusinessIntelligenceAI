@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { api } from "../api";
 import Loader from "../components/Loader";
-import { Cloud, Search, Database, Server, Component, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Cloud, Search, Database, Server, Component, AlertTriangle, CheckCircle2, ChevronRight } from "lucide-react";
 
 const CONNECTORS = [
-  { id: "snowflake", name: "Snowflake", icon: <Cloud size={32} color="var(--brand)" />, desc: "Connect to your Snowflake Data Cloud" },
-  { id: "bigquery", name: "Google BigQuery", icon: <Search size={32} color="#4285F4" />, desc: "Connect to your GCP Data Warehouse" },
-  { id: "postgresql", name: "PostgreSQL", icon: <Database size={32} color="#336791" />, desc: "Connect to standard PostgreSQL databases" },
-  { id: "redshift", name: "Amazon Redshift", icon: <Server size={32} color="#FF9900" />, desc: "Connect to your AWS Data Warehouse" },
-  { id: "databricks", name: "Databricks", icon: <Component size={32} color="#FF3621" />, desc: "Connect to Databricks SQL or Spark" },
+  { id: "snowflake", name: "Snowflake", icon: <Cloud size={19} color="#29B5E8" />, desc: "Snowflake Data Cloud" },
+  { id: "bigquery", name: "Google BigQuery", icon: <Search size={19} color="#4285F4" />, desc: "GCP data warehouse" },
+  { id: "postgresql", name: "PostgreSQL", icon: <Database size={19} color="#5b8fc7" />, desc: "Standard PostgreSQL" },
+  { id: "redshift", name: "Amazon Redshift", icon: <Server size={19} color="#FF9900" />, desc: "AWS data warehouse" },
+  { id: "databricks", name: "Databricks", icon: <Component size={19} color="#FF3621" />, desc: "Databricks SQL or Spark" },
 ];
 
 export default function Integrations() {
@@ -42,13 +42,23 @@ export default function Integrations() {
       {step === "select" && (
         <div className="grid grid-2-1" style={{ gap: 24, alignItems: "start" }}>
           <div>
-            <div className="card-title" style={{ marginBottom: 16 }}>Available Connectors</div>
-            <div className="grid grid-2">
-              {CONNECTORS.map((c) => (
-                <button key={c.id} className="card scenario-card" onClick={() => { setSelected(c); setStep("configure"); }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>{c.icon}</div>
-                  <div className="card-title">{c.name}</div>
-                  <div className="card-sub">{c.desc}</div>
+            <div className="card-title" style={{ marginBottom: 14 }}>Available Connectors</div>
+            {/* Compact tiles: these are a pick-one list, not five feature cards.
+                At card size each one was ~90% empty space. */}
+            <div className="tile-grid">
+              {CONNECTORS.map((c, i) => (
+                <button
+                  key={c.id}
+                  className="tile reveal"
+                  style={{ ["--i" as string]: i, textAlign: "left", cursor: "pointer" }}
+                  onClick={() => { setSelected(c); setStep("configure"); }}
+                >
+                  <span className="tile-icon">{c.icon}</span>
+                  <span className="tile-body">
+                    <span className="tile-name">{c.name}</span>
+                    <span className="tile-sub">{c.desc}</span>
+                  </span>
+                  <ChevronRight size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
                 </button>
               ))}
             </div>

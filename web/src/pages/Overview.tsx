@@ -1,9 +1,10 @@
-import Loader from "../components/Loader";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, fmt } from "../api";
 import { Pipeline } from "../charts";
 import PersonaSwitcher from "../components/PersonaSwitcher";
+import Sparkline from "../components/Sparkline";
+import { SkeletonKpiGrid } from "../components/Skeleton";
 import { AlertTriangle, TrendingUp, TrendingDown, Workflow, ArrowRight } from "lucide-react";
 import type { Freshness, Movement, Persona, Telemetry, Split } from "../types";
 
@@ -14,17 +15,27 @@ interface Props {
   onPersonaChange: (id: string) => void;
 }
 
+/** Formats a KPI value for its declared unit. */
+function kpiValue(m: Movement): string {
+  if (m.unit === "currency") return fmt.compact(m.actual);
+  if (m.unit === "ratio") return `${(m.actual * 100).toFixed(1)}%`;
+  return m.actual.toLocaleString("en-GB", { maximumFractionDigits: 0 });
+}
+
 export default function Overview({ week, persona, personas, onPersonaChange }: Props) {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [freshness, setFreshness] = useState<Freshness[]>([]);
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
   const [split, setSplit] = useState<Split | null>(null);
+  const [series, setSeries] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let live = true;
     setLoading(true);
     setError(null);
+    setSeries({});
     Promise.all([
       api.movements(week, persona),
       api.freshness(),
@@ -32,18 +43,31 @@ export default function Overview({ week, persona, personas, onPersonaChange }: P
       api.split().catch(() => null),
     ])
       .then(([m, f, t, sp]) => {
-        setMovements(m.movements ?? []);
+        if (!live) return;
+        const found = m.movements ?? [];
+        setMovements(found);
         setFreshness(f);
         setTelemetry(t);
         setSplit(sp);
+
+        // Histories load per-KPI after the tiles are already on screen, so a
+        // slow series never delays the numbers themselves. Each card draws its
+        // line as it arrives; one that fails just renders without a line.
+        found.forEach((mv) => {
+          api.series(mv.kpi, persona, week, 26)
+            .then((s) => {
+              if (!live) return;
+              setSeries((prev) => ({ ...prev, [mv.kpi]: s.points.map((p) => p.value) }));
+            })
+            .catch(() => {});
+        });
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e) => live && setError(e.message))
+      .finally(() => live && setLoading(false));
+    return () => { live = false; };
   }, [week, persona]);
 
-  if (loading) return (
-    <Loader text="Computing KPI movements across all sources..." />
-  );
+  if (loading) return <SkeletonKpiGrid count={6} />;
 
   if (error) return (
     <div className="error-banner"><AlertTriangle size={16} /> {error}</div>
@@ -51,6 +75,14 @@ export default function Overview({ week, persona, personas, onPersonaChange }: P
 
   const material = movements.filter((m) => m.material);
   const nonMaterial = movements.filter((m) => !m.material);
+
+  // The hero is the most consequential movement, not a hardcoded KPI: the
+  // largest material one by money, falling back to the first tracked KPI so
+  // the layout still holds on a quiet week.
+  const hero =
+    [...material].sort((a, b) => Math.abs(b.impact_gbp ?? 0) - Math.abs(a.impact_gbp ?? 0))[0]
+    ?? movements[0];
+  const rest = movements.filter((m) => m.kpi !== hero?.kpi);
 
   return (
     <div>
@@ -102,65 +134,25 @@ export default function Overview({ week, persona, personas, onPersonaChange }: P
               {material.map((m) => m.label).join(" · ")}
             </div>
           </div>
-          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>
-            Both statistical (Z &gt; 2.5) and business (£150k) bars must clear
-          </div>
+          {/* The rule that produced the alert, as a chip rather than text
+              stranded at the far edge of a wide banner. */}
+          <span className="pill" style={{ marginLeft: "auto", flexShrink: 0 }}>
+            Clears both bars — Z &gt; 2.5 and £150k
+          </span>
         </div>
       )}
 
-      {/* KPI Tiles */}
-      <div className="tiles-grid">
-        {movements.map((m) => {
-          const pct = m.delta_pct ?? 0;
-          const isPos = m.delta >= 0;
-          return (
-            <div key={m.kpi} className={`kpi-tile${m.material ? " material" : ""}`}>
-              <div className="kpi-tile-label">
-                {m.label}
-                {m.material && (
-                  <span 
-                    className="badge badge-neg has-tooltip" 
-                    style={{ marginLeft: 8 }}
-                    data-tooltip="Exceeds statistical (Z > 2.5) and business (GBP 150k) thresholds"
-                  >
-                    material
-                  </span>
-                )}
-              </div>
-              <div className="kpi-tile-value" style={{ color: m.material ? "var(--neg)" : "var(--ink)" }}>
-                {m.unit === "currency"
-                  ? fmt.compact(m.actual)
-                  : m.unit === "ratio"
-                  ? `${(m.actual * 100).toFixed(1)}%`
-                  : m.actual.toLocaleString("en-GB")}
-              </div>
-              <div className="kpi-tile-delta">
-                <span className={isPos ? "delta-pos" : "delta-neg"} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  {isPos ? <TrendingUp size={14} /> : <TrendingDown size={14} />} {Math.abs(pct * 100).toFixed(1)}%
-                </span>
-                <span style={{ color: "var(--muted)", fontSize: 11 }}>vs expected</span>
-              </div>
-
-              <CompareBar actual={m.actual} expected={m.expected} isPos={isPos} />
-
-              <div className="kpi-tile-foot">
-                <span className="has-tooltip" data-tooltip="Anomaly Score: How unusual this movement is compared to historical patterns (Z-score)">
-                  Anomaly: {m.z.toFixed(2)}
-                </span> · {m.history_weeks}w history · {m.baseline_method}
-              </div>
-              {m.kpi === "net_revenue" && (
-                <Link to="/investigation" className="kpi-tile-investigate">
-                  Investigate this <ArrowRight size={12} />
-                </Link>
-              )}
-            </div>
-          );
-        })}
+      {/* KPI block: one hero, then a grid whose last row always fills. */}
+      <div className="kpi-grid">
+        {hero && <HeroKpi m={hero} points={series[hero.kpi]} />}
+        {rest.map((m, i) => (
+          <KpiCard key={m.kpi} m={m} points={series[m.kpi]} index={i + 1} />
+        ))}
       </div>
 
       <div className="grid grid-2" style={{ marginTop: 20 }}>
         {/* Source Freshness */}
-        <div className="card">
+        <div className="card reveal" style={{ ["--i" as string]: 7 }}>
           <div className="card-header">
             <div>
               <div className="card-title">Data Quality & SLA Compliance</div>
@@ -209,7 +201,7 @@ export default function Overview({ week, persona, personas, onPersonaChange }: P
 
         {/* Runtime Telemetry */}
         {telemetry && (
-          <div className="card">
+          <div className="card reveal" style={{ ["--i" as string]: 8 }}>
             <div className="card-header">
               <div>
                 <div className="card-title">System Diagnostics (Admin)</div>
@@ -298,18 +290,88 @@ export default function Overview({ week, persona, personas, onPersonaChange }: P
   );
 }
 
-/** Real actual-vs-expected comparison, no invented series — a bar growing from
- *  a fixed "expected" mark rather than a bare percentage, so a scan of the tile
- *  grid reads magnitude at a glance. */
-function CompareBar({ actual, expected, isPos }: { actual: number; expected: number; isPos: boolean }) {
-  if (!expected) return null;
-  const ratio = actual / expected;
-  const clamped = Math.max(0.5, Math.min(1.5, ratio));
-  const width = ((clamped - 0.5) / 1.0) * 100;
+/** Shared delta line: direction, size, and what it is measured against. */
+function DeltaLine({ m }: { m: Movement }) {
+  const isPos = m.delta >= 0;
   return (
-    <div className="kpi-compare-track" title={`Actual ${fmt.abs(actual)} vs expected ${fmt.abs(expected)}`}>
-      <div className="kpi-compare-marker" />
-      <div className={`kpi-compare-fill ${isPos ? "pos" : "neg"}`} style={{ width: `${width}%` }} />
+    <div className="kpi-card-delta">
+      <span className={isPos ? "delta-pos" : "delta-neg"} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        {isPos ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+        {Math.abs((m.delta_pct ?? 0) * 100).toFixed(1)}%
+      </span>
+      <span style={{ color: "var(--muted)", fontWeight: 500 }}>vs expected</span>
+    </div>
+  );
+}
+
+/**
+ * The lead movement, given the space its consequence warrants.
+ *
+ * The sparkline carries the expectation as a dashed rule, so the gap the rest
+ * of the page is about is visible here rather than only described.
+ */
+function HeroKpi({ m, points }: { m: Movement; points?: number[] }) {
+  const tone = m.material ? "neg" : m.delta >= 0 ? "pos" : "neutral";
+  return (
+    <div className="kpi-hero reveal">
+      <div className="kpi-hero-left">
+        <div className="kpi-card-head" style={{ marginBottom: 2 }}>
+          <span className="kpi-card-label">{m.label}</span>
+          {m.material && (
+            <span className="badge badge-neg has-tooltip"
+              data-tooltip="Exceeds statistical (Z > 2.5) and business (GBP 150k) thresholds">
+              material
+            </span>
+          )}
+        </div>
+        <div className="kpi-hero-value" style={{ color: m.material ? "var(--neg)" : "var(--ink)" }}>
+          {kpiValue(m)}
+        </div>
+        <DeltaLine m={m} />
+        <div className="kpi-card-meta" style={{ marginTop: 14 }}>
+          Anomaly {m.z.toFixed(2)} · {m.history_weeks}w history · {m.baseline_method}
+        </div>
+        <Link to="/investigation" className="kpi-tile-investigate" style={{ marginTop: 16 }}>
+          Investigate this <ArrowRight size={12} />
+        </Link>
+      </div>
+
+      <div className="kpi-hero-spark">
+        {points
+          ? <Sparkline points={points} tone={tone} height={150} expected={m.expected} />
+          : <div className="skeleton" style={{ width: "100%", height: 150, borderRadius: "var(--radius)" }} />}
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ m, points, index }: { m: Movement; points?: number[]; index: number }) {
+  const tone = m.material ? "neg" : m.delta >= 0 ? "pos" : "neutral";
+  return (
+    <div className={`kpi-card reveal${m.material ? " is-material" : ""}`} style={{ ["--i" as string]: index }}>
+      <div className="kpi-card-head">
+        <span className="kpi-card-label">{m.label}</span>
+        {m.material && (
+          <span className="badge badge-neg has-tooltip" style={{ marginLeft: "auto" }}
+            data-tooltip="Exceeds statistical (Z > 2.5) and business (GBP 150k) thresholds">
+            material
+          </span>
+        )}
+      </div>
+
+      <div className="kpi-card-value" style={{ color: m.material ? "var(--neg)" : "var(--ink)" }}>
+        {kpiValue(m)}
+      </div>
+      <DeltaLine m={m} />
+      <div className="kpi-card-meta">
+        Anomaly {m.z.toFixed(2)} · {m.history_weeks}w history
+      </div>
+
+      <div className="kpi-card-spark">
+        {points
+          ? <Sparkline points={points} tone={tone} height={46} expected={m.expected} />
+          : <div className="skeleton" style={{ height: "100%", borderRadius: 0 }} />}
+      </div>
     </div>
   );
 }

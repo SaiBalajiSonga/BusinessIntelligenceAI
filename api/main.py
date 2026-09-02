@@ -163,6 +163,36 @@ def personas() -> list[dict]:
     ]
 
 
+# ----------------------------------------------------------------- series --
+
+@app.get("/v1/series", tags=["analysis"])
+def kpi_series(
+    kpi: str = Query(...), persona: str = Query("cfo"), weeks: int = Query(26, ge=2, le=200),
+    week: str = Query(FOCAL_WEEK),
+) -> dict:
+    """
+    A KPI's measured weekly history, scoped to the persona's entitlement.
+
+    Serves the sparklines on the overview. It is the same series the baseline
+    is fitted on, so what the card draws and what the engine reasoned over are
+    the same numbers -- a masked KPI is refused here exactly as it is refused
+    everywhere else, rather than being drawn and then hidden.
+    """
+    _persona(persona)
+    _week(week)
+    c = service.contract()
+    if kpi not in c.kpi_ids:
+        raise HTTPException(404, f"no KPI {kpi!r} in the active contract")
+    if kpi in set(service.masked_for(persona)):
+        raise HTTPException(403, f"{kpi!r} is masked for persona {persona!r}")
+
+    points = service.series_for(kpi, _scope_key(persona), weeks, week)
+    return {
+        "kpi": kpi, "label": c.kpi(kpi)["label"], "unit": c.kpi(kpi)["unit"],
+        "persona": persona, "points": points,
+    }
+
+
 # -------------------------------------------------------------- movements --
 
 @app.get("/v1/movements", tags=["analysis"])
