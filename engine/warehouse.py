@@ -10,15 +10,18 @@ layer does the maths on.
 
 from __future__ import annotations
 
-import pathlib
-
 import duckdb
 import pandas as pd
 
 from engine.contract import Contract, load
+from engine.paths import REPO_ROOT, writable_root
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "warehouse" / "bi.duckdb"
+# Reads (the contract, and data/raw/ if it was committed for the deploy) stay
+# rooted at the repo -- read-only is fine for a read. Writes (the warehouse
+# file itself, and data/raw/ when it has to be generated at runtime) go
+# through writable_root(); see engine/paths.py for why the two can differ.
+ROOT = REPO_ROOT
+DB_PATH = writable_root() / "warehouse" / "bi.duckdb"
 
 # ISO year-week, e.g. 2026-W32. Built explicitly rather than via strftime so
 # the year is the ISO year, which diverges from the calendar year in late Dec.
@@ -106,7 +109,13 @@ def _build(con: duckdb.DuckDBPyConnection, contract: Contract) -> None:
     for name, table in SOURCE_TABLES.items():
         if name not in src:
             continue    # this contract does not declare a source by this name
+        # Prefer a repo-committed extract if one exists; data/raw/ is
+        # gitignored though, so on a fresh checkout (and on every serverless
+        # deploy, where it's never committed) this falls through to the
+        # writable copy, generating it there first if even that is missing.
         path = ROOT / src[name]["path"]
+        if not path.exists():
+            path = writable_root() / src[name]["path"]
         if not path.exists():
             import data.generate
             data.generate.main()

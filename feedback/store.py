@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import os
-import pathlib
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
@@ -28,10 +27,14 @@ from typing import Any, Protocol
 
 import pandas as pd
 
+from engine.paths import writable_root
+
 VERDICTS = ("correct", "wrong_driver", "known_cause", "not_material", "unclear", "hallucination", "missed_factor", "bad_tone")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-FEEDBACK_DB = ROOT / "warehouse" / "feedback.duckdb"
+# Through writable_root(), not the repo root directly -- a read-only deploy
+# (Vercel's Lambda-based runtime) can't create this file where the repo root
+# would put it. See engine/paths.py.
+FEEDBACK_DB = writable_root() / "warehouse" / "feedback.duckdb"
 
 
 def _now() -> str:

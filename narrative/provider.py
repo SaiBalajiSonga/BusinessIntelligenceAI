@@ -26,8 +26,12 @@ import time
 from dataclasses import asdict, dataclass, field
 
 from engine.contract import Contract, load
+from engine.paths import writable_root
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+# Through writable_root(), not the repo root directly -- same reason as
+# engine/warehouse.py and feedback/store.py: a read-only deploy can't create
+# this file at a path under the repo root. See engine/paths.py.
+ROOT = writable_root()
 
 
 # ---------------------------------------------------------------- results --

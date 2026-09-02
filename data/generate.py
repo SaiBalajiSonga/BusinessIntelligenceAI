@@ -17,17 +17,21 @@ construction rather than by coincidence.
 
 from __future__ import annotations
 
-import pathlib
-
 import duckdb
 import numpy as np
 import pandas as pd
 import yaml
 
+from engine.paths import writable_root
+
 SEED = 20260828
 RNG = np.random.default_rng(SEED)
 
-ROOT = pathlib.Path(__file__).resolve().parent
+# Writes go through writable_root(), not a path relative to this file --
+# engine/warehouse.py resolves `data/raw/<name>.parquet` from the same root
+# when it decides this needs (re)generating, and the two have to agree on
+# where that lands. Locally that's just the repo root, unchanged from before.
+ROOT = writable_root() / "data"
 RAW = ROOT / "raw"
 
 # ---------------------------------------------------------------- calendar --
