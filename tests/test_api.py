@@ -242,6 +242,62 @@ def test_series_refuses_a_kpi_the_contract_does_not_define():
     assert r.status_code == 404
 
 
+# ------------------------------------------------------- static UI serving --
+
+def test_index_html_can_never_be_served_from_a_stale_cache():
+    """
+    A cached index.html shipped a blank white page to production.
+
+    index.html is what maps to the content-hashed asset filenames, so an old
+    copy requests JS and CSS that no longer exist and nothing renders. The trap
+    is that FileResponse builds its ETag from (mtime, size) and every build of
+    this file is the same *length* — Vite's hashes are fixed-width — so once
+    the deploy platform normalises mtimes, two different builds get the same
+    ETag, the server answers 304, and the browser keeps the dead HTML.
+
+    Both halves are asserted: the response forbids storing it, and presenting
+    the ETag the server itself just issued still does not produce a 304.
+    """
+    r = client.get("/")
+    if r.status_code == 404:
+        pytest.skip("no built web/dist in this checkout")
+
+    assert "no-store" in r.headers.get("cache-control", ""), \
+        "index.html must not be storable, or a deploy can leave a blank page behind"
+
+    etag = r.headers.get("etag")
+    if etag:
+        again = client.get("/", headers={"If-None-Match": etag})
+        assert again.status_code == 200, \
+            "a conditional request must not 304 index.html into a stale build"
+
+
+def test_spa_routes_serve_uncacheable_html_too():
+    """The deep-link fallback returns the same document, so it needs the same
+    protection — otherwise refreshing on /investigation restores the bug."""
+    r = client.get("/investigation")
+    if r.status_code == 404:
+        pytest.skip("no built web/dist in this checkout")
+    assert "no-store" in r.headers.get("cache-control", "")
+
+
+def test_hashed_assets_are_cached_hard():
+    """The corollary: index.html is only cheap to re-fetch because the bulk of
+    the payload beside it is content-addressed and cacheable forever."""
+    import pathlib
+
+    assets = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist" / "assets"
+    if not assets.exists():
+        pytest.skip("no built web/dist in this checkout")
+    name = next((p.name for p in assets.glob("*.js")), None)
+    if name is None:
+        pytest.skip("no built JS asset")
+
+    r = client.get(f"/assets/{name}")
+    assert r.status_code == 200
+    assert "immutable" in r.headers.get("cache-control", "")
+
+
 # ------------------------------------------------------------ memoisation --
 
 def test_memoise_computes_once_for_concurrent_callers_of_the_same_key():

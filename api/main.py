@@ -541,21 +541,69 @@ def processing_split() -> dict:
 
 
 # ----------------------------------------------------------- static UI mount --
+import hashlib
 import pathlib
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 _DIST = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
 
+
+class _ImmutableStatic(StaticFiles):
+    """
+    Vite names these files after a hash of their own contents, so a given name
+    can never refer to different bytes. That makes them safe to cache hard, and
+    it is what lets index.html be uncacheable without costing anything: the
+    small file is re-fetched, the megabyte of JS beside it is not.
+    """
+
+    def file_response(self, *args, **kwargs):        # type: ignore[override]
+        response = super().file_response(*args, **kwargs)
+        response.headers["cache-control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 if (_DIST / "assets").exists():
-    app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
+    app.mount("/assets", _ImmutableStatic(directory=str(_DIST / "assets")), name="assets")
+
+
+def _index_response() -> Response:
+    """
+    Serve index.html so a browser can never reuse an older copy.
+
+    This is the file that maps to the content-hashed asset names, so a stale
+    copy asks for JS and CSS filenames that no longer exist and the app renders
+    as a blank white page — which is exactly what happened in production.
+
+    The trap is that FileResponse derives its ETag from (mtime, size), and
+    every build of this file is byte-for-byte the same *length*: Vite's hashes
+    are fixed-width, so `index-BomD8V52.js` and `index-DbscMnij.js` differ in
+    content but not in size. Once the deploy platform normalises mtimes, two
+    different builds produce the *same* ETag, the server answers 304, and the
+    browser keeps serving HTML that points at deleted files.
+
+    So the validator here is a hash of the actual bytes, and the response is
+    marked no-store. At 423 bytes, re-fetching it is not a cost worth
+    optimising against correctness.
+    """
+    index_file = _DIST / "index.html"
+    html = index_file.read_bytes()
+    return Response(
+        content=html,
+        media_type="text/html",
+        headers={
+            "cache-control": "no-store, no-cache, must-revalidate",
+            "etag": f'"{hashlib.md5(html, usedforsecurity=False).hexdigest()}"',
+        },
+    )
+
 
 @app.get("/")
 def serve_root():
-    index_file = _DIST / "index.html"
-    if index_file.exists():
-        return FileResponse(str(index_file))
+    if (_DIST / "index.html").exists():
+        return _index_response()
     return {"status": "ok", "message": "KPI Intelligence API is running. Open /docs for Swagger UI."}
+
 
 @app.get("/{full_path:path}")
 def serve_spa(full_path: str):
@@ -564,9 +612,8 @@ def serve_spa(full_path: str):
     target = _DIST / full_path
     if target.exists() and target.is_file():
         return FileResponse(str(target))
-    index_file = _DIST / "index.html"
-    if index_file.exists():
-        return FileResponse(str(index_file))
+    if (_DIST / "index.html").exists():
+        return _index_response()
     raise HTTPException(404, "Not Found")
 
 
