@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api, fmt } from "../api";
 import FeedbackModal from "../components/FeedbackModal";
+import PersonaSwitcher from "../components/PersonaSwitcher";
 import {
   Wrench, Search, ShieldAlert, Check, X, ChevronDown, ChevronUp,
   Info, AlertCircle, Inbox, Zap,
 } from "lucide-react";
-import type { Actions, Recommendation } from "../types";
+import type { Actions, Persona, Recommendation } from "../types";
 
 const KIND_ICON: Record<string, ReactNode> = {
   corrective: <Wrench size={15} />,
@@ -201,10 +202,12 @@ export function RecCard({ rec, week, persona }: { rec: Recommendation; week: str
 interface PlaybookProps {
   week: string;
   persona: string;
+  personas?: Persona[];
+  onPersonaChange?: (id: string) => void;
   hideHeader?: boolean;
 }
 
-export default function ActionPlaybook({ week, persona, hideHeader }: PlaybookProps) {
+export default function ActionPlaybook({ week, persona, personas = [], onPersonaChange, hideHeader }: PlaybookProps) {
   const [actions, setActions] = useState<Actions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -230,12 +233,20 @@ export default function ActionPlaybook({ week, persona, hideHeader }: PlaybookPr
   return (
     <div>
       {!hideHeader && (
-        <div className="page-header">
-          <div className="page-eyebrow">Standalone view</div>
-          <h1 className="page-title">Action Playbook</h1>
-          <p className="page-sub">
-            Recommended mitigations &middot; Expected impact bounds &middot; Guardrails &middot; Decision rights
-          </p>
+        <div className="page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+          <div>
+            <div className="page-eyebrow">Standalone view</div>
+            <h1 className="page-title">Action Playbook</h1>
+            <p className="page-sub">
+              Recommended mitigations &middot; Expected impact bounds &middot; Guardrails &middot; Decision rights
+            </p>
+          </div>
+          {onPersonaChange && (
+            <div>
+              <div className="section-label" style={{ marginBottom: 8, textAlign: "right" }}>Viewing as</div>
+              <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
+            </div>
+          )}
         </div>
       )}
 

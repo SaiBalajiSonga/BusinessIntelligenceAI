@@ -23,13 +23,10 @@ const NAV = [
 ];
 
 function TopNav({
-  week, persona, personas, onPersonaChange, theme, onThemeToggle, onCmdOpen,
+  week, theme, onThemeToggle, onCmdOpen,
   mobileOpen, onMobileToggle,
 }: {
   week: string;
-  persona: string;
-  personas: Persona[];
-  onPersonaChange: (p: string) => void;
   freshness: Freshness[];
   theme: "dark" | "light";
   onThemeToggle: () => void;
@@ -51,19 +48,6 @@ function TopNav({
         <span className="topbar-week">{week}</span>
 
         <div className="topbar-spacer" />
-
-        <div className="seg persona-seg" role="group" aria-label="Persona">
-          {personas.map((p) => (
-            <button
-              key={p.id}
-              aria-pressed={p.id === persona}
-              onClick={() => onPersonaChange(p.id)}
-              title={`${p.regions.join(", ")}`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
 
         <button className="topbar-cmd-btn" onClick={onCmdOpen}>
           <Search size={14} /> <span className="cmd-btn-label">Search</span> <kbd>⌘K</kbd>
@@ -101,19 +85,6 @@ function TopNav({
               </NavLink>
             );
           })}
-          <div className="section-label" style={{ marginTop: 12, marginBottom: 8 }}>Persona</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {personas.map((p) => (
-              <button
-                key={p.id}
-                className={`btn btn-sm ${p.id === persona ? "btn-primary" : "btn-ghost"}`}
-                style={{ justifyContent: 'flex-start' }}
-                onClick={() => onPersonaChange(p.id)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
         </nav>
       )}
     </header>
@@ -155,9 +126,6 @@ function AppShell() {
     <div className="app-shell">
       <TopNav
         week={FOCAL_WEEK}
-        persona={persona}
-        personas={personas}
-        onPersonaChange={setPersona}
         freshness={freshness}
         theme={theme}
         onThemeToggle={toggleTheme}
@@ -169,15 +137,15 @@ function AppShell() {
       <main className="main-content">
         <div className="content-frame">
           <Routes>
-            <Route path="/" element={<Overview week={FOCAL_WEEK} persona={persona} />} />
+            <Route path="/" element={<Overview week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />} />
             <Route path="/investigation" element={<Investigate week={FOCAL_WEEK} persona={persona} />} />
-            <Route path="/actions" element={<ActionPlaybook week={FOCAL_WEEK} persona={persona} />} />
+            <Route path="/actions" element={<ActionPlaybook week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />} />
             <Route path="/governance" element={<Governance />} />
-            <Route path="/feedback" element={<FeedbackHub week={FOCAL_WEEK} persona={persona} />} />
+            <Route path="/feedback" element={<FeedbackHub week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />} />
             <Route path="/system" element={
               <div style={{ display: "flex", flexDirection: "column", gap: "56px" }}>
                 <Governance />
-                <FeedbackHub week={FOCAL_WEEK} persona={persona} />
+                <FeedbackHub week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />
               </div>
             } />
             <Route path="/integrations" element={<Integrations />} />

@@ -195,7 +195,7 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
               <p className="note" style={{ marginBottom: 8 }}>{scenario.desc}</p>
               <p className="note" style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 6 }}>
                 <Users size={12} /> Viewing as <strong style={{ color: "var(--ink-2)" }}>{insight.entitlement.persona}</strong>
-                <span style={{ color: "var(--muted)" }}>— set by this scenario, independent of the persona switcher above</span>
+                <span style={{ color: "var(--muted)" }}>— fixed by this scenario, not switchable here (pick a different scenario above to change it)</span>
               </p>
 
               {insight.entitlement.masked_columns.length > 0 && (

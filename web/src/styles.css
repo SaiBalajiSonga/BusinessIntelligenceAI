@@ -1202,7 +1202,6 @@ figure { margin: 0; }
   .topbar-cmd-btn .cmd-btn-label { display: none; }
   .topbar-cmd-btn kbd { display: none; }
   .topbar-row { padding-left: 16px !important; padding-right: 16px !important; gap: 8px !important; }
-  .persona-seg { display: none; }
 }
 
 /* -------------------------------------------- Tooltips -- */

@@ -3,15 +3,18 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, fmt } from "../api";
 import { Pipeline } from "../charts";
+import PersonaSwitcher from "../components/PersonaSwitcher";
 import { AlertTriangle, TrendingUp, TrendingDown, Workflow, ArrowRight } from "lucide-react";
-import type { Freshness, Movement, Telemetry, Split } from "../types";
+import type { Freshness, Movement, Persona, Telemetry, Split } from "../types";
 
 interface Props {
   week: string;
   persona: string;
+  personas: Persona[];
+  onPersonaChange: (id: string) => void;
 }
 
-export default function Overview({ week, persona }: Props) {
+export default function Overview({ week, persona, personas, onPersonaChange }: Props) {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [freshness, setFreshness] = useState<Freshness[]>([]);
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
@@ -51,12 +54,18 @@ export default function Overview({ week, persona }: Props) {
 
   return (
     <div>
-      <div className="page-header">
-        <div className="page-eyebrow">Focal week {week}</div>
-        <h1 className="page-title">KPI Overview</h1>
-        <p className="page-sub">
-          {movements.length} KPIs tracked · {material.length} material movement{material.length !== 1 ? "s" : ""} detected
-        </p>
+      <div className="page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+        <div>
+          <div className="page-eyebrow">Focal week {week}</div>
+          <h1 className="page-title">KPI Overview</h1>
+          <p className="page-sub">
+            {movements.length} KPIs tracked · {material.length} material movement{material.length !== 1 ? "s" : ""} detected
+          </p>
+        </div>
+        <div>
+          <div className="section-label" style={{ marginBottom: 8, textAlign: "right" }}>Viewing as</div>
+          <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
+        </div>
       </div>
 
       {/* Signature hero: the actual measured engine pipeline for this run */}

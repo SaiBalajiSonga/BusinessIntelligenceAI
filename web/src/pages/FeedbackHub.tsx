@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { api, fmt } from "../api";
 import { toast } from "../components/Toast";
+import PersonaSwitcher from "../components/PersonaSwitcher";
 import {
   Brain, BarChart3, Inbox, Pin, RotateCw, AlertTriangle,
   Check, X, HelpCircle, Ban, Sparkles, MessageCircleWarning,
 } from "lucide-react";
-import type { FeedbackRecord, Learning } from "../types";
+import type { FeedbackRecord, Learning, Persona } from "../types";
 
-interface Props { week: string; persona: string; }
+interface Props {
+  week: string;
+  persona: string;
+  personas?: Persona[];
+  onPersonaChange?: (id: string) => void;
+}
 
 const VERDICT_STYLE: Record<string, { badge: string; icon: typeof Check }> = {
   correct:       { badge: "badge-confident", icon: Check },
@@ -20,7 +26,7 @@ const VERDICT_STYLE: Record<string, { badge: string; icon: typeof Check }> = {
   unclear:       { badge: "badge-neutral",   icon: HelpCircle },
 };
 
-export default function FeedbackHub({ week, persona }: Props) {
+export default function FeedbackHub({ week, persona, personas = [], onPersonaChange }: Props) {
   const [feedbackData, setFeedbackData] = useState<{
     count: number;
     by_verdict: Record<string, number>;
@@ -88,12 +94,20 @@ export default function FeedbackHub({ week, persona }: Props) {
 
   return (
     <div>
-      <div className="page-header">
-        <div className="page-eyebrow">Learning loop</div>
-        <h1 className="page-title">Feedback & Learning</h1>
-        <p className="page-sub">
-          Analyst verdicts · Isotonic calibration · Driver prior updates · Business annotations
-        </p>
+      <div className="page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+        <div>
+          <div className="page-eyebrow">Learning loop</div>
+          <h1 className="page-title">Feedback & Learning</h1>
+          <p className="page-sub">
+            Analyst verdicts · Isotonic calibration · Driver prior updates · Business annotations
+          </p>
+        </div>
+        {onPersonaChange && (
+          <div>
+            <div className="section-label" style={{ marginBottom: 8, textAlign: "right" }}>Viewing as</div>
+            <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-2" style={{ gap: 20, marginBottom: 24 }}>
