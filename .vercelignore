@@ -1,0 +1,17 @@
+# Not needed at runtime -- api/main.py only reads contracts/, data/raw/,
+# and serves the already-built web/dist. Keeping these out of the Lambda
+# bundle is purely a size/build-time optimization; nothing here is
+# imported or read by the deployed function.
+venv/
+.venv/
+__pycache__/
+*.pyc
+tests/
+web/src/
+web/node_modules/
+web/*.tsbuildinfo
+.git/
+warehouse/
+*.md
+PLAN.md
+LICENSE
