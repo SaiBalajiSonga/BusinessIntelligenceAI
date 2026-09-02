@@ -17,6 +17,18 @@ construction rather than by coincidence.
 
 from __future__ import annotations
 
+import pathlib
+import sys
+
+# Runnable directly (`python data/generate.py`, as documented above and in
+# the README) as well as as a module (`python -m data.generate`, which is
+# how engine/warehouse.py invokes it on demand). Only the first form needs
+# this: run as a plain script, this file's own directory is on sys.path,
+# not the repo root, so `import engine.paths` would otherwise fail.
+_REPO_ROOT = str(pathlib.Path(__file__).resolve().parent.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 import duckdb
 import numpy as np
 import pandas as pd

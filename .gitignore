@@ -2,8 +2,12 @@
 __pycache__/
 *.pyc
 
-# generated — rebuild with `python data/generate.py`
-data/raw/
+# data/raw/ is intentionally committed, not ignored: a serverless deploy's
+# filesystem is read-only, so regenerating ~330k rows of synthetic data from
+# scratch on every cold container start is both slow (can exceed the
+# function timeout) and unnecessary when the exact deterministic output can
+# just ship with the code. Regenerate with `python data/generate.py` and
+# commit the result if the generator itself changes.
 warehouse/*.duckdb
 warehouse/*.duckdb.wal
 
