@@ -12,6 +12,7 @@ is exactly what this architecture exists to avoid shipping.
 
 from __future__ import annotations
 
+import os
 import re
 import threading
 from contextlib import asynccontextmanager
@@ -41,12 +42,27 @@ def _persona_ids() -> tuple[str, ...]:
 _ISO_WEEK = re.compile(r"^(\d{4})-W(\d{1,2})$")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def _start_warmup() -> None:
     # warm in the background so the server answers /health immediately while
     # the focal week is being computed
     threading.Thread(target=service.warm, daemon=True).start()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _start_warmup()
     yield
+
+
+if os.environ.get("VERCEL"):
+    # Vercel's Python ASGI adapter (`vc_init.py`) forwards HTTP scopes
+    # straight to the app without ever sending the ASGI `lifespan` events, so
+    # the hook above never runs there and COLD_PROFILE would sit empty for
+    # the life of every container. Module import happens exactly once per
+    # cold container, before the first request scope arrives, so starting
+    # the same background warm-up here gives it the same head start the
+    # lifespan hook gives it locally.
+    _start_warmup()
 
 
 app = FastAPI(
