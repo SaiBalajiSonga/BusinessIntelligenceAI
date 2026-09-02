@@ -69,6 +69,7 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
   const [expandedCause, setExpandedCause] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState("story");
   const [loading, setLoading] = useState(true);
+  const [actionsLoading, setActionsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -84,23 +85,44 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
   useEffect(() => {
     let live = true;
     setLoading(true);
+    setActionsLoading(true);
     setError(null);
     setExpandedCause(null);
     setCompareOpen(false);
     setCompareData({});
+    setInsight(null); setNarrative(null); setActions(null); setAttribution(null); setSplit(null);
+
+    // The story, evidence and confidence sections only need these three — fetch
+    // them as their own group so the page can render the instant they're back,
+    // rather than waiting on Actions too. On a cold serverless container any one
+    // of the five calls below can be the unlucky one that eats a 10-20s Python
+    // cold start; blocking the whole page on the slowest of five reads as "stuck
+    // loading" even when four of them answered in under a second.
     Promise.all([
       api.insight(week, persona, sku),
       api.narrative(week, persona, sku),
-      api.actions(week, persona, sku),
       api.attribution(week, persona, sku),
-      api.split().catch(() => null),
     ])
-      .then(([i, n, a, at, sp]) => {
+      .then(([i, n, at]) => {
         if (!live) return;
-        setInsight(i); setNarrative(n); setActions(a); setAttribution(at); setSplit(sp);
+        setInsight(i); setNarrative(n); setAttribution(at);
       })
       .catch((e) => live && setError(e.message))
       .finally(() => live && setLoading(false));
+
+    // Actions and the processing split load independently — their own section
+    // shows a local loading state instead of holding up everything above it.
+    Promise.all([
+      api.actions(week, persona, sku),
+      api.split().catch(() => null),
+    ])
+      .then(([a, sp]) => {
+        if (!live) return;
+        setActions(a); setSplit(sp);
+      })
+      .catch(() => {})
+      .finally(() => live && setActionsLoading(false));
+
     return () => { live = false; };
   }, [scenarioId]);
 
@@ -411,7 +433,9 @@ export default function Investigate({ week: _week, persona: _persona }: Props) {
               <p className="note" style={{ marginBottom: 24 }}>
                 Driver → lever → action → expected impact → owner → confidence → monitoring plan. Every impact number is computed from attribution, never written by the model.
               </p>
-              {actions && actions.recommendations.length > 0 ? (
+              {actionsLoading ? (
+                <Loader text="Computing recommended actions..." />
+              ) : actions && actions.recommendations.length > 0 ? (
                 <div className="grid" style={{ gap: 14 }}>
                   {actions.recommendations.map((r) => (
                     <RecCard key={r.driver} rec={r} week={week} persona={persona} />
