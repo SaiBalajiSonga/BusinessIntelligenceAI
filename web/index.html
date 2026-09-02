@@ -4,6 +4,51 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KPI Intelligence Workspace</title>
+    <meta name="description" content="Detects a material KPI movement, explains it with methods that can be checked, and abstains when the evidence will not carry a conclusion." />
+
+    <!--
+      Fonts are requested here rather than via @import inside the stylesheet.
+      An @import is only discovered after the CSS has been downloaded AND
+      parsed, so it serialises: html -> css -> google css -> font files, with a
+      fresh DNS+TLS handshake partway down. Declaring them in the head lets the
+      browser open both font connections while it is still fetching the CSS and
+      JS, and preconnect starts the handshakes before the URLs are even known.
+
+      Weights are only those actually used: Inter 400/500/600/700, the serif at
+      400 (it dresses the narrative prose and nothing else), and mono at
+      400/600. Asking for a variable serif across three weights and an optical
+      size axis was buying a much larger file than the design spends.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@400&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+
+    <script>
+      // Resolve the theme before first paint. React sets `data-theme` in an
+      // effect, which only runs after mount -- so the first frame painted with
+      // the light default and a dark-mode viewer saw a white flash on every
+      // load. This mirrors initialTheme() in App.tsx; the two must agree.
+      (function () {
+        try {
+          var t = localStorage.getItem("kpi-theme");
+          if (t !== "dark" && t !== "light") {
+            t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+    <style>
+      /* Paint the page background from the very first frame, before the
+         stylesheet lands, so the load does not start on a white rectangle. */
+      html[data-theme="dark"] { background: #0c0a09; color-scheme: dark; }
+      html[data-theme="light"] { background: #fafaf9; color-scheme: light; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

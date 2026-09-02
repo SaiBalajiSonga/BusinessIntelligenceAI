@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
 import { api } from "./api";
+import { prefetchRoutes } from "./prefetch";
 import CommandPalette from "./components/CommandPalette";
 import ToastContainer from "./components/Toast";
 import Integrations from "./pages/Integrations";
@@ -102,6 +103,53 @@ function initialTheme(): "dark" | "light" {
   }
 }
 
+/**
+ * Governance and the learning loop, as one page.
+ *
+ * These were two page components stacked in a div, so the route rendered two
+ * eyebrows and two page-sized titles — it read as two documents glued
+ * together rather than one place. They are genuinely one subject: what the
+ * system knows, and how it learns. So the route owns the title, and each half
+ * becomes a section under it.
+ */
+function SystemPage({ persona, personas, onPersonaChange }: {
+  persona: string;
+  personas: Persona[];
+  onPersonaChange: (id: string) => void;
+}) {
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-eyebrow">System of record</div>
+        <h1 className="page-title">System &amp; Learning</h1>
+        <p className="page-sub">
+          The governed contract every number is computed from, and the feedback loop that
+          recalibrates it.
+        </p>
+      </div>
+
+      <section className="page-section">
+        <h2 className="section-heading">Governance</h2>
+        <p className="section-heading-sub">
+          KPI semantic contract · Source lineage · Entitlement matrix · Confidence architecture
+        </p>
+        <Governance hideHeader />
+      </section>
+
+      <section className="page-section">
+        <h2 className="section-heading">Feedback &amp; Learning</h2>
+        <p className="section-heading-sub">
+          Analyst verdicts · Isotonic calibration · Driver prior updates · Business annotations
+        </p>
+        <FeedbackHub
+          week={FOCAL_WEEK} persona={persona} personas={personas}
+          onPersonaChange={onPersonaChange} hideHeader
+        />
+      </section>
+    </div>
+  );
+}
+
 function AppShell() {
   const [theme, setTheme] = useState<"dark" | "light">(initialTheme);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -134,6 +182,11 @@ function AppShell() {
     api.freshness().then(setFreshness).catch(() => {});
   }, []);
 
+  // Warm the other routes once the browser is idle and the current page has
+  // had time to load its own data. See prefetch.ts for why this waits and why
+  // it goes one request at a time.
+  useEffect(() => prefetchRoutes(FOCAL_WEEK, persona), [persona]);
+
   const toggleTheme = useCallback(() => setTheme((t) => t === "dark" ? "light" : "dark"), []);
 
   return (
@@ -158,12 +211,7 @@ function AppShell() {
             <Route path="/actions" element={<ActionPlaybook week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />} />
             <Route path="/governance" element={<Governance />} />
             <Route path="/feedback" element={<FeedbackHub week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />} />
-            <Route path="/system" element={
-              <div style={{ display: "flex", flexDirection: "column", gap: "56px" }}>
-                <Governance />
-                <FeedbackHub week={FOCAL_WEEK} persona={persona} personas={personas} onPersonaChange={setPersona} />
-              </div>
-            } />
+            <Route path="/system" element={<SystemPage persona={persona} personas={personas} onPersonaChange={setPersona} />} />
             <Route path="/integrations" element={<Integrations />} />
           </Routes>
         </div>

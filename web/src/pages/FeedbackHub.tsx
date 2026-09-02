@@ -13,6 +13,7 @@ interface Props {
   persona: string;
   personas?: Persona[];
   onPersonaChange?: (id: string) => void;
+  hideHeader?: boolean;
 }
 
 const VERDICT_STYLE: Record<string, { badge: string; icon: typeof Check }> = {
@@ -26,7 +27,7 @@ const VERDICT_STYLE: Record<string, { badge: string; icon: typeof Check }> = {
   unclear:       { badge: "badge-neutral",   icon: HelpCircle },
 };
 
-export default function FeedbackHub({ week, persona, personas = [], onPersonaChange }: Props) {
+export default function FeedbackHub({ week, persona, personas = [], onPersonaChange, hideHeader }: Props) {
   const [feedbackData, setFeedbackData] = useState<{
     count: number;
     by_verdict: Record<string, number>;
@@ -104,21 +105,33 @@ export default function FeedbackHub({ week, persona, personas = [], onPersonaCha
 
   return (
     <div>
-      <div className="page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
-        <div>
-          <div className="page-eyebrow">Learning loop</div>
-          <h1 className="page-title">Feedback & Learning</h1>
-          <p className="page-sub">
-            Analyst verdicts · Isotonic calibration · Driver prior updates · Business annotations
-          </p>
-        </div>
-        {onPersonaChange && (
-          <div>
-            <div className="section-label" style={{ marginBottom: 8, textAlign: "right" }}>Viewing as</div>
+      {/* Not `hidden`: this element carries an inline `display: flex`, which
+          beats the [hidden] rule in the UA stylesheet and left the header
+          visible under the section title. */}
+      {hideHeader ? (
+        onPersonaChange && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
             <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
           </div>
-        )}
-      </div>
+        )
+      ) : (
+        <div className="page-header"
+          style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+          <div>
+            <div className="page-eyebrow">Learning loop</div>
+            <h1 className="page-title">Feedback & Learning</h1>
+            <p className="page-sub">
+              Analyst verdicts · Isotonic calibration · Driver prior updates · Business annotations
+            </p>
+          </div>
+          {onPersonaChange && (
+            <div>
+              <div className="section-label" style={{ marginBottom: 8, textAlign: "right" }}>Viewing as</div>
+              <PersonaSwitcher personas={personas} persona={persona} onPersonaChange={onPersonaChange} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-2" style={{ gap: 20, marginBottom: 24 }}>
         {/* Learning Summary */}

@@ -7,7 +7,7 @@ const TAB_ICON: Record<string, typeof BarChart3> = {
   kpis: BarChart3, sources: Database, personas: Users, confidence: Ruler,
 };
 
-export default function Governance() {
+export default function Governance({ hideHeader = false }: { hideHeader?: boolean } = {}) {
   // The contract is a static document for a given deploy, so a revisit should
   // never wait on it again.
   const [contract, setContract] = useState<Contract | null>(() => peek.contract() ?? null);
@@ -48,6 +48,7 @@ export default function Governance() {
 
   return (
     <div>
+      {!hideHeader && (
       <div className="page-header">
         <div className="page-eyebrow">System of record</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
@@ -63,6 +64,7 @@ export default function Governance() {
           KPI semantic contract · Source lineage · Entitlement matrix · Confidence architecture
         </p>
       </div>
+      )}
 
       {/* Tab bar */}
       <div className="seg" style={{ marginBottom: 20, display: "inline-flex" }}>

@@ -6,7 +6,9 @@
    to the confidence and delta colors it sits beside.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Fonts are linked from index.html, not imported here: an @import is only
+   found after this file downloads and parses, which serialises the font
+   fetch behind it. See the comment there. */
 
 /* -------------------------------------------- Design Tokens -- */
 :root {
@@ -1889,7 +1891,9 @@ figure { margin: 0; }
 /* Declared block so the name and sub stack even when the markup uses spans
    (a <button> may not contain a <div> in valid HTML). */
 .tile-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.tile-name { display: block; font-size: 13.5px; font-weight: 650; color: var(--ink); }
+/* 650 was not one of the weights loaded, so it silently snapped to a
+   neighbour — ask for the weight we actually ship. */
+.tile-name { display: block; font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .tile-sub {
   display: block;
   font-size: 11.5px; color: var(--muted);
@@ -1898,6 +1902,31 @@ figure { margin: 0; }
 
 /* The tile is also used as a <button>, which brings its own chrome. */
 button.tile { font: inherit; width: 100%; }
+
+/* ============================================================
+   PAGE SECTIONS
+   For routes that legitimately hold more than one subject. A section
+   heading has to read as clearly subordinate to the page title, or the
+   page looks like two documents stacked — which is what it was.
+   ============================================================ */
+
+.page-section { margin-bottom: 56px; }
+.page-section:last-child { margin-bottom: 0; }
+
+.section-heading {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.section-heading-sub {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin: 5px 0 22px;
+}
 
 /* ============================================================
    DETAIL FIXES
