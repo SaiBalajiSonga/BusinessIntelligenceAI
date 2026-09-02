@@ -1,81 +1,85 @@
-import { api, peek } from "./api";
+import { api, peek, startBootstrap } from "./api";
 
 /**
- * Warm the caches for pages the viewer has not opened yet.
+ * Load the app's data up front, so a click lands on data that is already here.
  *
- * The request cache already makes going *back* to a page instant. This is
- * about the first visit: by the time someone clicks "Investigate", the
- * analysis behind it can already be in memory.
+ * Two stages, because the work divides cleanly:
  *
- * Two constraints shape how this runs, and both come from the backend being a
- * serverless function rather than a warm server:
+ *  1. `/v1/bootstrap` — one request carrying the contract, personas,
+ *     freshness, telemetry, the week's movements, every KPI's history, and the
+ *     learning state. Against a serverless backend the request *count* is the
+ *     latency: each call is another chance to land on a cold container and pay
+ *     the Python import from scratch. Locally this is one 0.28s call in place
+ *     of fourteen totalling 4.2s, and the gap only widens when the containers
+ *     are cold.
  *
- *  - It must never compete with the page in front of the viewer. Every one of
- *    these endpoints costs real CPU on the server, and on a cold container
- *    that CPU is the same CPU the current page is waiting on. So prefetching
- *    starts only once the browser reports itself idle, and after a delay long
- *    enough for the current page to have finished asking for its own data.
+ *  2. The per-scenario analysis behind Investigate, fetched in parallel once
+ *     the bootstrap is done. These four share a single assessment server-side,
+ *     so asking together costs barely more than asking for one.
  *
- *  - Requests go one at a time. Firing them in parallel would hand the
- *    container several concurrent analyses to run, which under the GIL makes
- *    all of them slower — including whatever the viewer does next.
- *
- * Anything already cached is skipped, so this costs nothing on a revisit, and
- * failures are swallowed: a prefetch that does not arrive is not an error the
- * viewer should ever hear about.
+ * The earlier version of this walked a list serially after waiting for an idle
+ * callback, which on a cold backend meant a viewer could easily click through
+ * before the queue had moved — the situation this is meant to prevent. Nothing
+ * here blocks rendering: it is all cache-filling, and a request that fails is
+ * simply a page that loads normally later.
  */
 
-type Task = { done: () => boolean; run: () => Promise<unknown> };
+const FIRST_SCENARIO_PERSONA = "cfo";
 
-/** The focal scenario Investigate opens on, and the contract the system page needs. */
-function tasks(week: string, persona: string): Task[] {
+/** What Investigate opens on, and what the other scenarios switch to. */
+function analysisTargets(week: string): { persona: string; sku?: string }[] {
   return [
-    // Investigate's first scenario — the heaviest page, and the most likely
-    // next click from the overview.
-    { done: () => !!peek.insight(week, "cfo"), run: () => api.insight(week, "cfo") },
-    { done: () => !!peek.narrative(week, "cfo"), run: () => api.narrative(week, "cfo") },
-    { done: () => !!peek.attribution(week, "cfo"), run: () => api.attribution(week, "cfo") },
-    { done: () => !!peek.actions(week, "cfo"), run: () => api.actions(week, "cfo") },
-    // System & Learning.
-    { done: () => !!peek.contract(), run: () => api.contract() },
-    { done: () => !!peek.listFeedback(), run: () => api.listFeedback() },
-    { done: () => !!peek.learning(week, persona), run: () => api.learning(week, persona) },
+    { persona: FIRST_SCENARIO_PERSONA },
+    { persona: "eu_category_manager" },
+    { persona: "analyst", sku: "HOME-NEW-01" },
   ];
 }
 
-const whenIdle: (cb: () => void) => void =
-  typeof window !== "undefined" && "requestIdleCallback" in window
-    ? (cb) => (window as any).requestIdleCallback(cb, { timeout: 4000 })
-    : (cb) => window.setTimeout(cb, 1200);
+function prefetchAnalysis(week: string, target: { persona: string; sku?: string }): Promise<unknown> {
+  const { persona, sku } = target;
+  // Cheap to ask for together: all four read the same cached assessment.
+  return Promise.all([
+    peek.insight(week, persona, sku) ? null : api.insight(week, persona, sku),
+    peek.narrative(week, persona, sku) ? null : api.narrative(week, persona, sku),
+    peek.attribution(week, persona, sku) ? null : api.attribution(week, persona, sku),
+    peek.actions(week, persona, sku) ? null : api.actions(week, persona, sku),
+  ]).catch(() => {});
+}
 
 let started = false;
 
-/**
- * Idempotent: the shell may mount more than once in development, and a second
- * pass would only re-walk an already-warm list.
- */
-export function prefetchRoutes(week: string, persona: string, delayMs = 2500): () => void {
+/** Idempotent — the shell may mount twice in development. */
+export function prefetchAll(week: string, persona: string): () => void {
   if (started) return () => {};
   started = true;
 
   let cancelled = false;
-  const timer = window.setTimeout(() => {
-    whenIdle(async () => {
-      for (const task of tasks(week, persona)) {
-        if (cancelled) return;
-        if (task.done()) continue;
-        try {
-          await task.run();
-        } catch {
-          /* a prefetch is best-effort by definition */
-        }
-      }
-    });
-  }, delayMs);
 
-  return () => {
-    cancelled = true;
-    window.clearTimeout(timer);
-    started = false;
-  };
+  (async () => {
+    try {
+      await startBootstrap(week, persona);
+    } catch {
+      /* the pages will fetch what they need themselves */
+    }
+    if (cancelled) return;
+
+    // The first scenario first — it is the one a click is most likely to want
+    // — then the rest, so the common case is not queued behind the others.
+    const [first, ...rest] = analysisTargets(week);
+    await prefetchAnalysis(week, first);
+    if (cancelled) return;
+
+    // Only now: /v1/learning reports calibrated confidence, so it reaches for
+    // the same assessment the analysis above just computed. Asked before that
+    // it is one of the slowest calls in the app; asked after, it is nearly
+    // free — which is why it is here and not in the bootstrap.
+    if (!peek.learning(week, persona)) {
+      await api.learning(week, persona).catch(() => {});
+    }
+    if (cancelled) return;
+
+    await Promise.all(rest.map((t) => prefetchAnalysis(week, t)));
+  })();
+
+  return () => { cancelled = true; started = false; };
 }

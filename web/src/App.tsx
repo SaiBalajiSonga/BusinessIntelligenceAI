@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
 import { api } from "./api";
-import { prefetchRoutes } from "./prefetch";
+import { prefetchAll } from "./prefetch";
+import { FOCAL_WEEK, DEFAULT_PERSONA } from "./constants";
 import CommandPalette from "./components/CommandPalette";
 import ToastContainer from "./components/Toast";
 import Integrations from "./pages/Integrations";
@@ -14,7 +15,6 @@ import { Activity, Search, Sun, Moon, Menu, X } from "lucide-react";
 import type { Freshness, Persona } from "./types";
 import "./styles.css";
 
-const FOCAL_WEEK = "2026-W32";
 
 const NAV = [
   { to: "/", label: "Overview" },
@@ -154,7 +154,7 @@ function AppShell() {
   const [theme, setTheme] = useState<"dark" | "light">(initialTheme);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [persona, setPersona] = useState("cfo");
+  const [persona, setPersona] = useState(DEFAULT_PERSONA);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [freshness, setFreshness] = useState<Freshness[]>([]);
   const location = useLocation();
@@ -182,10 +182,9 @@ function AppShell() {
     api.freshness().then(setFreshness).catch(() => {});
   }, []);
 
-  // Warm the other routes once the browser is idle and the current page has
-  // had time to load its own data. See prefetch.ts for why this waits and why
-  // it goes one request at a time.
-  useEffect(() => prefetchRoutes(FOCAL_WEEK, persona), [persona]);
+  // Bootstrap is already in flight from main.tsx; this continues the job by
+  // pulling in the per-scenario analysis behind Investigate. See prefetch.ts.
+  useEffect(() => prefetchAll(FOCAL_WEEK, persona), [persona]);
 
   const toggleTheme = useCallback(() => setTheme((t) => t === "dark" ? "light" : "dark"), []);
 

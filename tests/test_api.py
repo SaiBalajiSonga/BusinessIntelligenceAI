@@ -242,6 +242,55 @@ def test_series_refuses_a_kpi_the_contract_does_not_define():
     assert r.status_code == 404
 
 
+# -------------------------------------------------------------- bootstrap --
+
+def test_bootstrap_sections_match_the_endpoints_they_stand_in_for():
+    """
+    The client seeds its request cache with these sections as though it had
+    called each endpoint. If a section stopped matching its endpoint's real
+    response, pages would render from subtly wrong shapes with no error — so
+    the equality is the actual contract, not the key names.
+    """
+    b = client.get("/v1/bootstrap", params={"week": WEEK, "persona": "cfo"}).json()
+
+    assert b["contract"] == client.get("/v1/contract").json()
+    assert b["personas"] == client.get("/v1/personas").json()
+    assert b["freshness"] == client.get("/v1/freshness").json()
+    assert b["feedback"] == client.get("/v1/feedback", params={"kpi": "net_revenue"}).json()
+
+    movements = client.get("/v1/movements", params={"week": WEEK, "persona": "cfo"}).json()
+    assert b["movements"]["movements"] == movements["movements"]
+
+    one = client.get("/v1/series", params={"kpi": "net_revenue", "persona": "cfo",
+                                           "week": WEEK, "weeks": 26}).json()
+    assert b["series"]["net_revenue"] == one
+
+
+def test_bootstrap_excludes_the_expensive_analysis():
+    """
+    Bootstrap exists to collapse many cheap calls into one, and is fired before
+    the first paint. Anything that reaches `assessment_for` belongs outside it:
+    including `learning` — which looks like a small feedback summary but calls
+    assessment_for to report calibrated confidence — measured 47s cold against
+    2.9s for the movements the landing page actually opens with.
+    """
+    b = client.get("/v1/bootstrap", params={"week": WEEK, "persona": "cfo"}).json()
+
+    for expensive in ("insight", "narrative", "actions", "attribution", "learning"):
+        assert expensive not in b, (
+            f"{expensive!r} pulls the full assessment into the bootstrap; "
+            "prefetch it separately instead"
+        )
+
+
+def test_bootstrap_respects_entitlement():
+    """It is a bulk read like any other, so a masked KPI must not ride along."""
+    b = client.get("/v1/bootstrap", params={"week": WEEK, "persona": "eu_category_manager"}).json()
+
+    assert "gross_margin_pct" not in b["series"]
+    assert all(m["kpi"] != "gross_margin_pct" for m in b["movements"]["movements"])
+
+
 # ------------------------------------------------------- static UI serving --
 
 def test_index_html_can_never_be_served_from_a_stale_cache():

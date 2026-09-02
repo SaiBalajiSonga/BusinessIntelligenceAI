@@ -520,6 +520,80 @@ def telemetry() -> dict:
     }
 
 
+@app.get("/v1/bootstrap", tags=["meta"])
+def bootstrap(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
+    """
+    Everything the app needs to open, in one request.
+
+    The workspace was making a dozen separate calls to render its first screen
+    and warm the next one. Against a long-lived server that is fine. Against a
+    serverless backend each call is its own chance to land on a cold container
+    and pay the Python import and dependency-install cost from scratch, so the
+    request count itself was the latency — and prefetching them one at a time
+    meant a viewer could easily click through before the queue had moved.
+
+    Composed by calling the same handlers the individual routes use, so every
+    field is byte-identical to fetching it directly and the client can seed its
+    cache with these values as though it had. Reimplementing the shapes here
+    would be a second source of truth that silently drifts.
+
+    Everything here is deliberately cheap. The per-scenario analysis (insight,
+    narrative, actions, attribution) is excluded: those share one assessment
+    and are cheap together once warm, but cold they are the slow part, and
+    folding them in would put the first screen behind a single request long
+    enough to risk the platform's function timeout.
+
+    `learning` is excluded for the same reason and less obviously — it reads
+    like a small feedback summary, but it calls `assessment_for` to report the
+    calibrated confidence, which drags the whole assessment in behind it.
+    Including it measured 47s cold against 2.9s for the movements this page
+    actually opens with. Anything added here should be timed cold before it
+    is trusted to be cheap.
+
+    Every section is computed defensively: a bootstrap that fails as a whole
+    because one optional panel raised would be worse than the N calls it
+    replaces.
+    """
+    _persona(persona)
+    _week(week)
+
+    def attempt(fn, default=None):
+        try:
+            return fn()
+        except Exception:
+            return default
+
+    movements_payload = attempt(lambda: movements(week=week, persona=persona), {"movements": []})
+
+    masked = set(service.masked_for(persona))
+    series_payload: dict[str, Any] = {}
+    for row in (movements_payload or {}).get("movements", []):
+        kpi = row["kpi"]
+        if kpi in masked:
+            continue
+        got = attempt(lambda k=kpi: kpi_series(kpi=k, persona=persona, weeks=26, week=week))
+        if got is not None:
+            series_payload[kpi] = got
+
+    return {
+        "week": week,
+        "persona": persona,
+        "contract": attempt(contract),
+        "personas": attempt(personas, []),
+        "freshness": attempt(source_freshness, []),
+        "telemetry": attempt(telemetry),
+        "movements": movements_payload,
+        "series": series_payload,
+        # Every argument is passed explicitly: these handlers default their
+        # parameters to Query(...) markers, which FastAPI resolves per request
+        # but a direct call hands straight through as the default object.
+        "feedback": attempt(lambda: list_feedback(kpi="net_revenue")),
+        # 503s until the cold profile has been measured; absence is expected,
+        # not an error, so it is reported as null rather than failing the call.
+        "processing_split": attempt(processing_split),
+    }
+
+
 @app.get("/v1/processing-split", tags=["meta"])
 def processing_split() -> dict:
     """
