@@ -9,6 +9,7 @@ fall when causes are unnamed, and the gate must actually close.
 
 from __future__ import annotations
 
+import duckdb
 import pytest
 
 from engine.confidence import (
@@ -25,6 +26,8 @@ from engine.confidence import (
 )
 from engine.contract import load
 from engine.warehouse import connect
+from feedback.learn import learn, persist
+from feedback.store import DuckDBStore, Feedback
 
 WEEK = "2026-W32"
 
@@ -142,3 +145,77 @@ def test_the_uninstrumented_driver_is_named_in_what_would_help(headline):
 
 def test_stale_source_is_named_in_what_would_help(headline):
     assert any("stale" in m for m in headline.missing)
+
+
+# --------------------------------------------------- the feedback loop closes --
+
+def test_repeated_wrong_driver_feedback_lowers_a_later_assessment(warehouse, headline):
+    """
+    The claim Fix 1 rests on: a driver an analyst has repeatedly marked wrong
+    must score measurably lower on a LATER run, not just get recorded. Without
+    `assess(..., store=...)` reading back the persisted priors, this is the
+    exact scenario that silently does nothing.
+    """
+    con, contract = warehouse
+
+    # W32's "price" factor is credited to discount_depth as a NAMED_LEVER —
+    # confirmed by test_driver_moved_finds_the_planted_discount above.
+    before = next(c for c in headline.causes if "discount_depth" in c.drivers)
+    assert before.status == NAMED_LEVER
+    assert before.learned_weight == 1.0
+    assert before.effective_credit == before.credit == 1.0
+
+    store = DuckDBStore(duckdb.connect(":memory:"))
+    for _ in range(20):
+        store.record_feedback(Feedback(
+            kpi="net_revenue", iso_week=WEEK, persona="analyst",
+            verdict="wrong_driver", driver="discount_depth",
+            correct_driver="fill_rate", confidence_shown=headline.score,
+        ))
+
+    state = learn(store, kpi="net_revenue", iso_week=WEEK)
+    assert state.priors["discount_depth"]["weight"] < 1.0, \
+        "20 wrong_driver verdicts and no correct ones must not leave the prior at 1.0"
+    persist(store, state, "net_revenue")
+
+    adjusted = assess(con, contract, "net_revenue", WEEK, store=store)
+    after = next(c for c in adjusted.causes if "discount_depth" in c.drivers)
+
+    assert after.learned_weight < 1.0
+    assert after.effective_credit < before.credit
+    assert adjusted.coverage < headline.coverage
+    assert adjusted.score < headline.score, \
+        "a driver with a history of being wrong must measurably lower a later assessment"
+
+
+def test_a_store_with_no_feedback_changes_nothing(warehouse, headline):
+    """The identity path: an empty store must reproduce the unlearned score."""
+    con, contract = warehouse
+    store = DuckDBStore(duckdb.connect(":memory:"))
+    same = assess(con, contract, "net_revenue", WEEK, store=store)
+    assert same.score == pytest.approx(headline.score)
+    assert same.calibration_applied is False
+
+
+def test_calibration_curve_is_persisted_and_reapplied_without_the_model(warehouse):
+    """
+    `persist()` must save enough of the fitted isotonic curve that a fresh
+    process — which never sees the sklearn model object — can still apply it
+    by reading the store, the way `engine.confidence.assess` does in production.
+    """
+    from feedback.seed import seed
+
+    con, contract = warehouse
+    store = DuckDBStore(duckdb.connect(":memory:"))
+    seed(store)  # plants a known overconfidence and enough rows to fit
+
+    state = learn(store, kpi="net_revenue", iso_week=WEEK)
+    assert state.calibration.fitted
+    persist(store, state, "net_revenue")
+
+    calib_param = store.params("calibration")["net_revenue"]
+    assert calib_param["x_thresholds"] and calib_param["y_thresholds"]
+
+    a = assess(con, contract, "net_revenue", WEEK, store=store)
+    assert a.calibration_applied is True
+    assert a.score < a.raw_score, "the planted overconfidence must pull the calibrated score down"

@@ -12,8 +12,10 @@ is exactly what this architecture exists to avoid shipping.
 
 from __future__ import annotations
 
+import re
 import threading
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -27,7 +29,16 @@ from engine.detect import FOCAL_WEEK
 from feedback.store import Annotation, Feedback
 from narrative.provider import TELEMETRY
 
-PERSONAS = ("cfo", "eu_category_manager", "analyst")
+# Persona ids come from the ACTIVE contract, not a literal here — a hardcoded
+# tuple is exactly what stops a second vertical (contracts/kpis_saas.yaml)
+# from ever being more than decoration, since every persona-taking endpoint
+# would keep validating against retail's ids no matter what KPI_CONTRACT_PATH
+# pointed to.
+def _persona_ids() -> tuple[str, ...]:
+    return tuple(service.contract().personas)
+
+
+_ISO_WEEK = re.compile(r"^(\d{4})-W(\d{1,2})$")
 
 
 @asynccontextmanager
@@ -57,13 +68,31 @@ app.add_middleware(
 
 
 def _persona(persona: str) -> str:
-    if persona not in PERSONAS:
-        raise HTTPException(400, f"unknown persona {persona!r}; expected one of {list(PERSONAS)}")
+    valid = _persona_ids()
+    if persona not in valid:
+        raise HTTPException(400, f"unknown persona {persona!r}; expected one of {list(valid)}")
     return persona
 
 
 def _scope_key(persona: str) -> tuple:
     return service._key(service.scope_for(persona))
+
+
+def _week(week: str) -> str:
+    """
+    A malformed or out-of-range `week` reached `feedback.learn.week_start`
+    unvalidated and raised a bare ValueError, which is exactly how an empty or
+    bad `week` query param turned into an unhandled 500 on `/v1/learning`. Every
+    endpoint that takes a week now rejects it up front with a real 422 instead.
+    """
+    m = _ISO_WEEK.match(week or "")
+    if not m:
+        raise HTTPException(422, f"{week!r} is not an ISO week (expected e.g. '2026-W32')")
+    try:
+        date.fromisocalendar(int(m.group(1)), int(m.group(2)), 1)
+    except ValueError:
+        raise HTTPException(422, f"{week!r} is not a valid ISO week") from None
+    return week
 
 
 # ------------------------------------------------------------------ meta --
@@ -99,7 +128,7 @@ def personas() -> list[dict]:
     return [
         {"id": p, "label": c.persona(p)["label"], "regions": c.persona(p)["regions"],
          "masked_columns": service.masked_for(p), "scope": service.scope_for(p)}
-        for p in PERSONAS
+        for p in _persona_ids()
     ]
 
 
@@ -111,6 +140,8 @@ def movements(
 ) -> dict:
     """Rung 0. What moved, and did it clear both the statistical and money bars."""
     _persona(persona)
+    _week(week)
+    masked = set(service.masked_for(persona))
     t = Timings()
     with t.track("detect (Rung 0)"):
         found = service.movements_for(week, _scope_key(persona))
@@ -124,8 +155,11 @@ def movements(
                 "material": m.material, "baseline_method": m.baseline_method,
                 "history_weeks": m.history_weeks, "backtest_weeks": m.backtest_n,
                 "not_flagged_because": m.reasons,
-            } for m in found
+            } for m in found if m.kpi not in masked
         ],
+        # transparency, not a data leak: which KPIs exist but were withheld —
+        # the same disclosure `/v1/insight` already makes for narrative evidence
+        "masked_kpis": sorted({m.kpi for m in found} & masked),
         "processing": t.summary(),
     }
 
@@ -139,6 +173,7 @@ def insight(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
     rung and method that produced it.
     """
     _persona(persona)
+    _week(week)
     key = _scope_key(persona)
     t = Timings()
 
@@ -156,6 +191,7 @@ def insight(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
             "score": a.score, "band": a.band, "coverage": a.coverage,
             "components": a.components, "action": a.action,
             "llm_will_be_called": a.band != ABSTAIN,
+            "raw_score": a.raw_score, "calibration_applied": a.calibration_applied,
         },
         "causes": [
             {
@@ -181,6 +217,7 @@ def insight(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
 def attribution(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
     """Rung 3. Where it happened, ranked by surprise rather than size."""
     _persona(persona)
+    _week(week)
     t = Timings()
     with t.track("drill (Rung 3)"):
         levels = service.drill_for(week, _scope_key(persona))
@@ -206,6 +243,7 @@ def attribution(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> d
 def actions(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict:
     """driver -> lever -> action -> expected impact -> owner -> confidence -> monitoring."""
     _persona(persona)
+    _week(week)
     key = _scope_key(persona)
     t = Timings()
     with t.track("levers"):
@@ -247,6 +285,7 @@ def narrative(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dic
     were rejected, and whether the model was called at all.
     """
     _persona(persona)
+    _week(week)
     t = Timings()
     with t.track("assess (Rungs 0-5)"):
         a = service.assessment_for(week, _scope_key(persona))
@@ -308,12 +347,26 @@ def submit_feedback(body: FeedbackIn) -> dict:
     """
     A correction, structured rather than free text. A thumbs-down teaches
     nothing; "the driver was wrong, it was actually X" updates a prior.
+
+    Recording the row is only half of it — the loop is not closed until the
+    learned calibration and driver priors are recomputed, persisted, and the
+    next assessment actually reads them. `service.relearn` does all three, so
+    a later `GET /v1/insight` for this KPI can score differently because of
+    what was just submitted.
     """
     try:
         fb = Feedback(**body.model_dump())
     except ValueError as e:
         raise HTTPException(422, str(e)) from None
-    return {"id": service.store().record_feedback(fb), "recorded": True}
+    fb_id = service.store().record_feedback(fb)
+    state = service.relearn(fb.kpi)
+    return {
+        "id": fb_id, "recorded": True,
+        "relearned": {
+            "calibration_fitted": state.calibration.fitted,
+            "drivers_updated": sorted(state.priors),
+        },
+    }
 
 
 @app.get("/v1/feedback", tags=["feedback"])
@@ -342,6 +395,7 @@ def learning(week: str = Query(FOCAL_WEEK), persona: str = Query("cfo")) -> dict
     of it. Kept as inspectable data rather than hidden inside a model file.
     """
     _persona(persona)
+    _week(week)
     state = service.learning_for(week, persona)
     a = service.assessment_for(week, _scope_key(persona))
     return {
@@ -425,21 +479,51 @@ class IntegrationCreds(BaseModel):
     password: str | None = None
 
 @app.post("/v1/integrations/test", tags=["system"])
-async def test_integration(creds: IntegrationCreds) -> dict:
-    import asyncio
-    # Simulate network latency and introspection for demo purposes
-    await asyncio.sleep(2.5)
-    
-    # In a real implementation, we would connect to PostgreSQL/Snowflake here
-    # e.g., using psycopg2 or snowflake-connector-python
-    
+def test_integration(creds: IntegrationCreds) -> dict:
+    """
+    No Snowflake/BigQuery/Postgres/Redshift/Databricks connector exists yet —
+    building one is a real, separate undertaking, not something to fake behind
+    a sleep. What this CAN do honestly is report the truth about the warehouse
+    the engine actually runs on: does each source the active KPI contract
+    declares really have a table here, and how many rows does it really hold.
+    That is a real check, not theater, and it fails truthfully — a stated
+    engine we cannot reach, or a source with no data — rather than always
+    returning the same fabricated "14 tables, 5 KPIs" regardless of input.
+    """
+    import time
+
     if creds.engine == "postgresql" and creds.user == "fail":
-        raise HTTPException(401, "Authentication failed for user 'fail'")
-        
+        # the one deliberately-scripted path, kept only to exercise the error
+        # UI — it never claims to have attempted a connection
+        raise HTTPException(401, "Authentication failed for user 'fail' (simulated — "
+                                  "no live PostgreSQL connector is implemented)")
+
+    t0 = time.perf_counter()
+    result = service.introspect_sources()
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    found, missing = result["found"], result["missing"]
+    total = len(found) + len(missing)
+
+    if not found:
+        raise HTTPException(
+            502,
+            f"Could not verify any of this contract's {total} declared source(s) against "
+            f"the live DuckDB warehouse: " +
+            "; ".join(f"{m['source']} ({m['reason']})" for m in missing),
+        )
+
     return {
-        "status": "success",
-        "message": f"Successfully connected to {creds.engine.title()}.",
+        "status": "success" if not missing else "partial",
+        "message": (
+            f"No external {creds.engine} connector is implemented — reporting what "
+            f"this engine's own DuckDB warehouse actually contains: {len(found)} of "
+            f"{total} contract source(s) verified in {elapsed_ms} ms."
+        ),
         "schema_introspected": True,
-        "tables_found": 14,
-        "kpis_generated": 5
+        "tables_found": len(found),
+        "tables": ", ".join(f"{f['source']}={f['table']} ({f['row_count']:,} rows)" for f in found),
+        "kpis_generated": len(service.contract().kpi_ids),
+        "missing_sources": ", ".join(m["source"] for m in missing) or "none",
+        "elapsed_ms": elapsed_ms,
     }

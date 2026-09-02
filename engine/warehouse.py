@@ -35,6 +35,31 @@ VIEWS = {
     "week_marketing": "v_week_marketing",
 }
 
+# contract `sources.<id>` -> the physical table this DuckDB warehouse actually
+# holds for it. Kept as one importable dict (rather than inline in `_build`)
+# so anything that needs to ask "does this source really exist here" — the
+# build step, the freshness manifest, `/v1/integrations/test` — asks the same
+# question the same way. A source with no entry here is real in the contract
+# but not yet wired to a physical table in THIS warehouse (e.g. the SaaS
+# contract's `billing`/`usage`) — that is reported as such, never invented.
+SOURCE_TABLES = {
+    "sales": "fct_sales",
+    "traffic": "fct_traffic",
+    "marketing": "fct_marketing_weekly",
+    "inventory": "fct_inventory",
+}
+
+# the column each physical table uses to say "as of when". Kept separate from
+# SOURCE_TABLES because it is not derivable from the contract's native_grain in
+# general (marketing's grain leads with `iso_week`; the table's own freshness
+# column is `week_start`).
+SOURCE_DATE_COLUMNS = {
+    "sales": "date",
+    "traffic": "date",
+    "marketing": "week_start",
+    "inventory": "date",
+}
+
 
 def connect(rebuild: bool = False, contract: Contract | None = None) -> duckdb.DuckDBPyConnection:
     """
@@ -78,12 +103,9 @@ def _is_built(con: duckdb.DuckDBPyConnection) -> bool:
 def _build(con: duckdb.DuckDBPyConnection, contract: Contract) -> None:
     src = contract.sources
 
-    for name, table in [
-        ("sales", "fct_sales"),
-        ("traffic", "fct_traffic"),
-        ("marketing", "fct_marketing_weekly"),
-        ("inventory", "fct_inventory"),
-    ]:
+    for name, table in SOURCE_TABLES.items():
+        if name not in src:
+            continue    # this contract does not declare a source by this name
         path = ROOT / src[name]["path"]
         if not path.exists():
             import data.generate
@@ -169,21 +191,45 @@ def _build(con: duckdb.DuckDBPyConnection, contract: Contract) -> None:
 # -------------------------------------------------------------- freshness --
 
 def freshness(con: duckdb.DuckDBPyConnection, contract: Contract | None = None) -> pd.DataFrame:
-    """Per-source staleness against the contract's as_of. Feeds the confidence score."""
+    """
+    Per-source staleness against the contract's as_of. Feeds the confidence score.
+
+    Driven by `contract.sources` rather than a hardcoded probe list, so a
+    contract whose sources this DuckDB warehouse has never heard of (a second
+    vertical pointed here before its own data pipeline exists) is reported as
+    `not_connected` — honestly, without a KeyError — instead of assuming every
+    contract is the retail one.
+    """
     contract = contract or load()
     as_of = pd.Timestamp(contract.as_of)
 
-    probes = {
-        "sales": ("fct_sales", "date"),
-        "traffic": ("fct_traffic", "date"),
-        "marketing": ("fct_marketing_weekly", "week_start"),
-        "inventory": ("fct_inventory", "date"),
-    }
-
     rows = []
-    for source_id, (table, col) in probes.items():
-        spec = contract.source(source_id)
-        max_dt = con.sql(f"SELECT max({col}) FROM {table}").fetchone()[0]
+    for source_id, spec in contract.sources.items():
+        table = SOURCE_TABLES.get(source_id)
+        col = SOURCE_DATE_COLUMNS.get(source_id)
+
+        if table is None or col is None:
+            rows.append({
+                "source": source_id, "governance": spec.get("governance", "unknown"),
+                "latest_data": None, "lag_hours": None, "sla_hours": float(spec.get("sla_hours", 0)),
+                "status": "not_connected",
+                "note": "no physical table is mapped for this source in this DuckDB warehouse",
+            })
+            continue
+
+        try:
+            max_dt = con.sql(f"SELECT max({col}) FROM {table}").fetchone()[0]
+            if max_dt is None:
+                raise ValueError("empty table")
+        except Exception:
+            rows.append({
+                "source": source_id, "governance": spec.get("governance", "unknown"),
+                "latest_data": None, "lag_hours": None, "sla_hours": float(spec.get("sla_hours", 0)),
+                "status": "not_connected",
+                "note": f"table {table!r} has no data in this warehouse",
+            })
+            continue
+
         max_dt = pd.Timestamp(max_dt)
         lag_h = (as_of - max_dt).total_seconds() / 3600
         sla_h = float(spec["sla_hours"])
@@ -203,7 +249,12 @@ def freshness(con: duckdb.DuckDBPyConnection, contract: Contract | None = None) 
         })
 
     df = pd.DataFrame(rows)
-    df["freshness_score"] = (1.0 - (df["lag_hours"] / (df["sla_hours"] * 4))).clip(0.0, 1.0)
+    known = df["lag_hours"].notna()
+    df["freshness_score"] = 0.0
+    if known.any():
+        lag = df.loc[known, "lag_hours"].astype(float)
+        sla = df.loc[known, "sla_hours"].astype(float)
+        df.loc[known, "freshness_score"] = (1.0 - (lag / (sla * 4))).clip(0.0, 1.0)
     return df
 
 

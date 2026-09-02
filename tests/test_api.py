@@ -54,6 +54,37 @@ def test_an_unknown_persona_is_refused():
     assert "unknown persona" in r.json()["detail"]
 
 
+# ------------------------------------------------------------ malformed week --
+
+@pytest.mark.parametrize("bad_week", ["", "notaweek", "2026-W60", "2026", "  "])
+def test_learning_refuses_a_malformed_week_instead_of_crashing(bad_week):
+    """
+    The confirmed live bug: `week_start()` in feedback.learn raised a bare
+    ValueError on a malformed or out-of-range ISO week, and nothing on the path
+    from `/v1/learning` caught it — an unhandled 500 rather than a client error.
+    """
+    r = client.get("/v1/learning", params={"week": bad_week, "persona": "cfo"})
+    assert r.status_code == 422
+    assert "ISO week" in r.json()["detail"]
+
+
+def test_learning_answers_for_a_real_week_and_every_persona():
+    for persona in ("cfo", "eu_category_manager", "analyst"):
+        r = client.get("/v1/learning", params={"week": WEEK, "persona": persona})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["backend"] == "duckdb"
+        assert "calibration" in body and "driver_priors" in body
+        assert "confidence_adjustment" in body
+
+
+def test_a_malformed_week_is_refused_on_every_endpoint_that_takes_one():
+    for path in ("/v1/movements", "/v1/insight", "/v1/attribution", "/v1/actions",
+                 "/v1/narrative", "/v1/learning"):
+        r = client.get(path, params={"week": "not-a-week", "persona": "cfo"})
+        assert r.status_code == 422, f"{path} did not validate its week param"
+
+
 # ----------------------------------------------------------- entitlement --
 
 @pytest.fixture(scope="module")
@@ -115,6 +146,58 @@ def test_modelled_recovery_never_exceeds_the_gap():
 
 # ------------------------------------------------------------ attribution --
 
+def test_movements_withholds_a_masked_kpi_from_an_unauthorized_persona():
+    """
+    Fix 3: row-level region filtering was real, but column-level masking
+    (`masked_columns`) was only enforced inside narrative evidence-building.
+    `/v1/movements` loops every KPI in the contract — including
+    gross_margin_pct, which eu_category_manager is masked from — and returned
+    it unfiltered. It must not appear in that persona's response at all, while
+    an unmasked persona (analyst) must still see it (proving the test is not
+    vacuous — e.g. because the KPI simply never moved this week).
+    """
+    masked = client.get("/v1/movements", params={"week": WEEK, "persona": "eu_category_manager"}).json()
+    unmasked = client.get("/v1/movements", params={"week": WEEK, "persona": "analyst"}).json()
+
+    masked_kpis = {m["kpi"] for m in masked["movements"]}
+    unmasked_kpis = {m["kpi"] for m in unmasked["movements"]}
+
+    assert "gross_margin_pct" not in masked_kpis
+    assert "gross_margin_pct" in masked["masked_kpis"]
+    assert "gross_margin_pct" in unmasked_kpis, \
+        "the KPI must genuinely be present for an unmasked persona, or this test proves nothing"
+
+
+def test_no_endpoint_leaks_a_masked_kpis_real_value():
+    """
+    A masked persona must not be able to retrieve gross_margin_pct's real
+    value from ANY analysis endpoint, not just narrative evidence. The KPI id
+    is allowed to appear in an explicit disclosure field (`masked_kpis`,
+    `entitlement.masked_columns`) — that is transparency, not a leak — so this
+    checks the actual data payloads each endpoint carries numbers in.
+    """
+    params = {"week": WEEK, "persona": "eu_category_manager"}
+
+    m = client.get("/v1/movements", params=params).json()
+    assert all(row["kpi"] != "gross_margin_pct" for row in m["movements"])
+
+    i = client.get("/v1/insight", params=params).json()
+    assert all(c["factor"] != "gross_margin_pct" for c in i["causes"])
+    assert "gross_margin_pct" not in str(i.get("would_raise_confidence", []))
+
+    att = client.get("/v1/attribution", params=params).json()
+    assert "gross_margin_pct" not in str(att["levels"])
+
+    act = client.get("/v1/actions", params=params).json()
+    assert all(r["driver"] != "gross_margin_pct" for r in act["recommendations"])
+
+    n = client.get("/v1/narrative", params=params).json()
+    assert "gross_margin_pct" not in n["text"]
+    evidence = dict(n["evidence"])
+    evidence.pop("entitlement", None)   # legitimate disclosure of what's withheld, not a leak
+    assert "gross_margin_pct" not in str(evidence)
+
+
 def test_the_drill_reaches_the_planted_stockout():
     body = client.get("/v1/attribution", params={"week": WEEK, "persona": "cfo"}).json()
     path = {step["dimension"]: step["chosen"] for step in body["path"]}
@@ -148,7 +231,100 @@ def test_processing_split_refuses_to_answer_from_a_warm_cache():
 
 
 def test_cold_profile_is_populated_by_warming():
+    """
+    `warm()` is only an honest measurement of cold work if it is actually
+    MEASURING cold work — every stage it times is behind a memoised function,
+    so any of them the rest of the suite has already exercised for this week
+    would report ~0ms without actually being fast. Clearing every stage's
+    cache first is what makes this test's claim true regardless of what ran
+    before it, rather than true by incidental test order.
+    """
     service.COLD_PROFILE.clear()
+    for fn in (service.movements_for, service.decomposition_for, service.drill_for,
+               service.assessment_for, service.recommendations_for, service.narrative_for):
+        fn.cache_clear()
     service.warm(WEEK)
     assert service.COLD_PROFILE["deterministic_ms"] > 0
     assert service.COLD_PROFILE["llm_share"] < 0.5
+
+
+# ---------------------------------------------------------- integrations --
+
+def test_integration_test_reports_the_real_warehouse_not_a_fabricated_one():
+    """
+    Fix 4: this endpoint used to `sleep(2.5)` and always return
+    `tables_found: 14` no matter what was posted. It must now report numbers
+    that actually come from querying DuckDB, and they must be real — the
+    retail contract's four sources, with row counts that match the built
+    warehouse — not a constant.
+    """
+    r = client.post("/v1/integrations/test",
+                    json={"engine": "snowflake", "host": "x", "database": "y"})
+    assert r.status_code == 200
+    body = r.json()
+
+    assert body["tables_found"] == 4
+    assert body["missing_sources"] == "none"
+    assert "14" not in body["message"]           # the old fabricated constant
+    assert body["elapsed_ms"] < 500, "a real DuckDB count() should be fast, not a 2.5s fake sleep"
+    for source, table in (("sales", "fct_sales"), ("traffic", "fct_traffic"),
+                          ("marketing", "fct_marketing_weekly"), ("inventory", "fct_inventory")):
+        assert f"{source}={table} (" in body["tables"]
+
+    # the KPI count must reflect the ACTIVE contract, not a hardcoded 5
+    assert body["kpis_generated"] == len(service.contract().kpi_ids)
+
+
+def test_integration_test_still_simulates_the_auth_failure_path():
+    r = client.post("/v1/integrations/test", json={"engine": "postgresql", "user": "fail"})
+    assert r.status_code == 401
+
+
+# -------------------------------------------------------- the feedback loop --
+
+def test_posted_feedback_persists_and_lowers_a_later_assessment(monkeypatch):
+    """
+    Fix 1, at the HTTP boundary: POST /v1/feedback must not just record a row
+    — it must persist the learned driver priors and invalidate the cached
+    assessment, so the very next GET /v1/insight reflects it. Runs against an
+    isolated in-memory store (monkeypatched in) so it never touches the real
+    warehouse/feedback.duckdb file on disk.
+    """
+    import duckdb
+
+    from feedback.store import DuckDBStore
+
+    real_store = service._STORE
+    test_store = DuckDBStore(duckdb.connect(":memory:"))
+    monkeypatch.setattr(service, "_STORE", test_store)
+    service.assessment_for.cache_clear()
+
+    try:
+        before = client.get("/v1/insight", params={"week": WEEK, "persona": "cfo"}).json()
+        credited = {d for c in before["causes"] for d in c["drivers"]}
+        assert "discount_depth" in credited, "discount_depth must be credited before feedback"
+
+        for _ in range(20):
+            r = client.post("/v1/feedback", json={
+                "kpi": "net_revenue", "iso_week": WEEK, "persona": "analyst",
+                "verdict": "wrong_driver", "driver": "discount_depth",
+                "correct_driver": "fill_rate", "confidence_shown": before["confidence"]["score"],
+            })
+            assert r.status_code == 201
+            # fill_rate also appears in `drivers_updated` — it is tracked as the
+            # named replacement (`missed_by_engine`) even though it has never
+            # itself been credited in this store
+            assert "discount_depth" in r.json()["relearned"]["drivers_updated"]
+
+        assert test_store.params("driver_prior")["net_revenue:discount_depth"]["weight"] < 1.0
+
+        after = client.get("/v1/insight", params={"week": WEEK, "persona": "cfo"}).json()
+        assert after["confidence"]["score"] < before["confidence"]["score"]
+    finally:
+        # `relearn()` cleared assessment/recommendation/narrative caches against
+        # the FAKE store above; restore the real one so nothing downstream
+        # scores against this test's throwaway feedback.
+        service._STORE = real_store
+        service.assessment_for.cache_clear()
+        service.recommendations_for.cache_clear()
+        service.narrative_for.cache_clear()

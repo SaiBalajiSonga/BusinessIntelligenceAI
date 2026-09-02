@@ -140,10 +140,23 @@ class Cause:
     drivers: list[str] = field(default_factory=list)
     owner: str | None = None
     scope: dict[str, Any] | None = None      # where the lever should be pulled
+    learned_weight: float = 1.0              # multiplier from persisted driver priors
 
     @property
     def credit(self) -> float:
         return CREDIT[self.status]
+
+    @property
+    def effective_credit(self) -> float:
+        """
+        Credit after the feedback loop's driver priors are applied.
+
+        A driver an analyst has repeatedly marked wrong scores below its raw
+        credit; one that has held up scores at or above it, capped at the
+        credit ceiling because effective_credit still means "share of the gap
+        actually explained" and cannot exceed 100%.
+        """
+        return float(np.clip(self.credit * self.learned_weight, 0.0, 1.0))
 
 
 @dataclass
@@ -160,16 +173,43 @@ class Assessment:
     contradictions: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     note: str = ""
+    raw_score: float = 0.0            # before the learned calibration curve
+    calibration_applied: bool = False
 
 
 # ------------------------------------------------------------ assessment --
 
+def _learned_state(store: Any, kpi_id: str) -> tuple[dict[str, dict], dict | None]:
+    """
+    Read back exactly what `feedback.learn.persist()` wrote for this KPI.
+
+    Deliberately a read of PERSISTED state, not a live recomputation of
+    `feedback.learn.driver_priors`/`calibrate` on every assessment — that keeps
+    scoring cheap and keeps "what the engine currently believes" equal to
+    "what `python -m feedback.learn` last wrote", which is the auditable
+    contract the persistence layer exists to offer.
+    """
+    if store is None:
+        return {}, None
+    try:
+        all_priors = store.params("driver_prior")
+        prefix = f"{kpi_id}:"
+        priors = {k[len(prefix):]: v for k, v in all_priors.items() if k.startswith(prefix)}
+        calibration = store.params("calibration").get(kpi_id)
+        return priors, calibration
+    except Exception:
+        # the feedback store is best-effort context for scoring, never a hard
+        # dependency of it — an unreachable store must not take assess() down
+        return {}, None
+
+
 def assess(
     con, contract: Contract, kpi_id: str = "net_revenue", week: str = FOCAL_WEEK,
-    filters: dict[str, Any] | None = None,
+    filters: dict[str, Any] | None = None, store: Any = None,
 ) -> Assessment:
     weights = contract.confidence["weights"]
     bands = contract.confidence["bands"]
+    learned_priors, calibration = _learned_state(store, kpi_id)
 
     if contract.decomposition(kpi_id) is None:
         raise ValueError(
@@ -250,15 +290,24 @@ def assess(
                     )
                     owner = contract.drivers["competitor_price_index"]["owner_role"]
 
-            causes.append(Cause(
+            cause = Cause(
                 factor=factor, label=node.label, gbp=gbp, rung=node.rung,
                 status=status, evidence=evidence, drivers=drivers, owner=owner,
                 scope=scope,
-            ))
+            )
+            if cause.drivers:
+                # a cause can lean on more than one driver (the mix factor
+                # does); take the worst-trusted one, so a single driver with a
+                # poor track record cannot be laundered through a co-credited
+                # driver that happens to be reliable
+                seen = [learned_priors[d]["weight"] for d in cause.drivers if d in learned_priors]
+                if seen:
+                    cause.learned_weight = float(min(seen))
+            causes.append(cause)
 
     # ---- coverage ------------------------------------------------------
     gross = sum(abs(c.gbp) for c in causes) or 1.0
-    coverage = sum(c.credit * abs(c.gbp) for c in causes) / gross
+    coverage = sum(c.effective_credit * abs(c.gbp) for c in causes) / gross
 
     # ---- the other components -----------------------------------------
     fresh = freshness(con, contract).set_index("source")
@@ -273,8 +322,8 @@ def assess(
     history_score = float(np.clip(history, 0.0, 1.0))
 
     method_strength = sum(
-        RUNG_STRENGTH.get(c.rung, 0.6) * abs(c.gbp) for c in causes if c.credit > 0
-    ) / (sum(abs(c.gbp) for c in causes if c.credit > 0) or 1.0)
+        RUNG_STRENGTH.get(c.rung, 0.6) * abs(c.gbp) for c in causes if c.effective_credit > 0
+    ) / (sum(abs(c.gbp) for c in causes if c.effective_credit > 0) or 1.0)
 
     # ---- contradictions ------------------------------------------------
     contradictions: list[str] = []
@@ -297,7 +346,22 @@ def assess(
         "method_strength": method_strength,
         "contradiction": contradiction_score,
     }
-    score = float(np.clip(sum(weights[k] * v for k, v in components.items()), 0.0, 1.0))
+    raw_score = float(np.clip(sum(weights[k] * v for k, v in components.items()), 0.0, 1.0))
+
+    # ---- the learned recalibration --------------------------------------
+    # The one place ML touches confidence: an isotonic curve fitted on analyst
+    # verdicts maps the raw score onto the rate at which insights at that score
+    # were actually judged correct. Below the sample floor `calibrate()` never
+    # fits, `store.params("calibration")` stays empty, and this is the identity
+    # — so an unfed loop changes nothing, exactly as it should.
+    score = raw_score
+    calibration_applied = False
+    if calibration and calibration.get("x_thresholds") and calibration.get("y_thresholds"):
+        score = float(np.clip(
+            np.interp(raw_score, calibration["x_thresholds"], calibration["y_thresholds"]),
+            0.0, 1.0,
+        ))
+        calibration_applied = True
 
     band = CONFIDENT if score >= bands["confident"] else (
         QUALIFIED if score >= bands["qualified"] else ABSTAIN
@@ -324,6 +388,7 @@ def assess(
         kpi=kpi_id, week=week, delta=d.delta, coverage=coverage, components=components,
         score=score, band=band, action=ACTIONS[band], causes=causes,
         contradictions=contradictions, missing=missing,
+        raw_score=raw_score, calibration_applied=calibration_applied,
     )
 
 
