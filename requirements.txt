@@ -1,38 +1,33 @@
-# BusinessIntelligence.ai - Requirements
-# 100% Free & Open-Source Python Stack
+# BusinessIntelligence.ai — Python dependencies
+# Every package here is actually imported somewhere in api/, engine/,
+# narrative/, feedback/ or data/ — kept minimal on purpose so a fresh
+# `pip install -r requirements.txt` is fast and doesn't drag in unrelated
+# toolchains (there is no Streamlit UI, no Supabase, no EconML in this repo).
 
-# Interactive UI & Visualizations
-streamlit>=1.35.0
-plotly>=5.20.0
-
-# In-Memory OLAP Database & Backend
+# In-memory OLAP warehouse — bundles its own parquet reader/writer
 duckdb>=0.10.0
-supabase>=2.4.0
-postgrest>=0.16.0
-pyarrow>=17.0
 
-# Mathematical, Statistical & Causal Core
+# Mathematical & statistical core (LMDI, STL baselines, DiD, isotonic calibration)
+# scipy isn't imported directly but is a hard dependency of statsmodels, so pip
+# resolves it automatically — no need to pin it here.
 numpy>=1.26.0
 pandas>=2.2.0
-scipy>=1.13.0
 statsmodels>=0.14.0
 scikit-learn>=1.5.0
-econml>=0.15.0
 
-# Semantic Contracts & Schema Validation
+# Semantic contract validation
 pydantic>=2.7.0
 pyyaml>=6.0.1
 
-# API Layer
+# API layer
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 
-# AI Orchestration (NVIDIA Nemotron / Gemini / Groq / OpenAI-compatible APIs)
+# LLM provider client — used for any OpenAI-compatible endpoint
+# (Groq, NVIDIA NIM, OpenRouter, Ollama). Not required if you only
+# run with the offline template narrator (no API key configured).
 openai>=1.30.0
-google-generativeai>=0.5.0
-requests>=2.31.0
 python-dotenv>=1.0.1
 
-# Testing & Quality Assurance
+# Testing
 pytest>=8.2.0
-pytest-asyncio>=0.23.0

@@ -30,7 +30,7 @@ The platform actively learns from Analyst feedback. When a user clicks "Dislike:
 Data access is enforced at the mathematical level, not just visually hidden. If an EU Category Manager logs in, they only see DE, FR, NL data. Highly sensitive metrics (like Gross Margin %) are structurally masked for unauthorized personas before any decomposition occurs.
 
 ### 4. Zero-Latency Caching & UI Polish
-The React frontend leverages an aggressive 30-second TTL in-memory cache and `onMouseEnter` pre-fetching. Combined with custom CSS `@keyframes` and professional SVG iconography (`lucide-react`), the platform feels instant and incredibly tactile.
+The React frontend leverages a 30-second TTL in-memory client-side cache (`web/src/api.ts`) so repeat navigation between pages doesn't re-fetch identical data. Combined with custom CSS `@keyframes`, a violet/graphite/serif design system, and professional SVG iconography (`lucide-react`), the platform is meant to read as a decision workspace rather than a generic admin panel.
 
 ---
 
@@ -38,34 +38,45 @@ The React frontend leverages an aggressive 30-second TTL in-memory cache and `on
 
 ```
 BusinessIntelligence.ai/
-├── api/                           # Backend Server (FastAPI)
-│   ├── main.py                    # REST API entrypoint & static file serving
-│   ├── cache.py                   # In-memory TTL caching engine
-│   ├── service.py                 # Core analysis orchestration
-│   ├── engine/                    # Mathematical Core
-│   │   ├── detect.py              # Anomaly & Materiality (Z-Scores)
-│   │   ├── confidence.py          # Abstention logic & data gaps
-│   │   ├── lmdi.py                # Logarithmic Mean Divisia Index math
-│   │   └── attribution.py         # Dimensional surprise ranking (Jensen-Shannon)
-│   ├── feedback/                  # Machine Learning Feedback Loop
-│   │   ├── store.py               # Feedback persistence
-│   │   └── learn.py               # Isotonic Calibration & Laplace Smoothing
-│   └── narrative/                 # LLM Integration
-│       ├── provider.py            # API layer (Gemini, Groq, etc)
-│       └── guard.py               # Hallucination interceptor (Numeric Validation)
+├── api/                            # Backend Server (FastAPI)
+│   ├── main.py                     # REST API entrypoint & serves the built frontend
+│   ├── cache.py                    # In-memory TTL caching engine
+│   └── service.py                  # Core analysis orchestration, warm-up profiling
 │
-├── web/                           # Frontend UI (React + Vite)
+├── engine/                         # Deterministic mathematical core
+│   ├── contract.py                 # KPI contract loader (retail/SaaS selectable)
+│   ├── warehouse.py                # DuckDB connection, grain reconciliation, freshness
+│   ├── detect.py                   # Rung 0 — Anomaly & Materiality (Z-scores)
+│   ├── decompose.py                # Rungs 1-2 — LMDI + Bennet price/volume/mix
+│   ├── attribute.py                # Rung 3 — Dimensional surprise ranking (Jensen-Shannon)
+│   ├── causal.py                   # Rung 4 — Difference-in-differences
+│   ├── confidence.py               # Rung 5 — Abstention logic, data gaps, learned recalibration
+│   └── levers.py                   # driver -> lever -> action -> recovery
+│
+├── feedback/                       # Machine Learning Feedback Loop
+│   ├── store.py                    # Feedback/annotation persistence (DuckDB)
+│   └── learn.py                    # Isotonic Calibration & Laplace-smoothed driver priors
+│
+├── narrative/                      # LLM Integration
+│   ├── provider.py                 # Providers (offline mock / any OpenAI-compatible API)
+│   ├── synthesize.py                # Persona prompts, evidence rendering, offline template
+│   └── validator.py                # Hallucination interceptor (Numeric Validation)
+│
+├── contracts/
+│   ├── kpis.yaml                   # Semantic Contract defining KPIs & thresholds (retail)
+│   └── kpis_saas.yaml              # SaaS vertical contract (KPI_CONTRACT_PATH)
+│
+├── web/                            # Frontend UI (React + Vite)
 │   ├── src/
-│   │   ├── pages/                 # NarrativeStudio, RootCause, Overview, Integrations
-│   │   ├── components/            # InlineFeedback, Animated Quote Loader, Toast
-│   │   ├── charts/                # Financial Impact Waterfall (Bridge Charts)
-│   │   ├── api.ts                 # Type-safe API client & Prefetching
-│   │   ├── types.ts               # Strict TypeScript interfaces
-│   │   └── styles.css             # Custom CSS variables, Grid layouts, animations
+│   │   ├── pages/                  # Overview, Investigate, Actions, Governance, FeedbackHub, Integrations
+│   │   ├── components/             # PersonaSwitcher, InlineFeedback, CommandPalette, Toast, Loader
+│   │   ├── charts.tsx               # Bridge waterfall, confidence bars, engine pipeline visual
+│   │   ├── api.ts                  # Type-safe API client + 30s client cache
+│   │   ├── types.ts                # Strict TypeScript interfaces
+│   │   └── styles.css              # Design tokens, component library, animations
 │   ├── package.json
 │   └── vite.config.ts
 │
-├── kpis.yaml                      # Semantic Contract defining KPIs & thresholds
 └── README.md
 ```
 
@@ -73,22 +84,13 @@ BusinessIntelligence.ai/
 
 ## 🛠️ Getting Started (Local Development)
 
-The application is designed to be completely self-contained. The FastAPI backend serves the REST API on `/v1` and simultaneously serves the built React frontend on `/`.
+The application is completely self-contained. The FastAPI backend serves the REST API on `/v1` and simultaneously serves the built React frontend on `/`.
 
 ### Prerequisites
 - **Python 3.10+**
-- **Node.js 18+**
+- **Node.js 18+** (only needed if you're changing the frontend — a built copy is already committed at `web/dist`)
 
-### 1. Build the Frontend
-```bash
-cd web
-npm install
-npm run build
-cd ..
-```
-*(Note: If you encounter Windows Application Control policies blocking Rollup during build, the repository includes a pre-built `/dist` directory for immediate backend serving).*
-
-### 2. Start the Backend Server
+### 1. Backend
 ```bash
 # Create and activate a virtual environment
 python -m venv venv
@@ -96,11 +98,21 @@ python -m venv venv
 # Mac/Linux: source venv/bin/activate
 
 # Install Python dependencies
-pip install fastapi uvicorn pydantic scikit-learn pandas
+pip install -r requirements.txt
 
-# Run the server
+# Run the server (--env-file is optional; only needed if you created a .env for a real LLM key)
 python -m uvicorn api.main:app --port 8000 --host 127.0.0.1 --env-file .env
 ```
+The synthetic dataset generates itself automatically on first use if `data/raw/` doesn't exist yet (`engine/warehouse.py` calls `data/generate.py` on demand) — the very first request will take a few seconds longer. To pre-generate it explicitly: `python data/generate.py`.
+
+### 2. (Optional) Rebuild the Frontend
+```bash
+cd web
+npm install
+npm run build
+cd ..
+```
+*(If this is skipped, the backend serves the pre-built `web/dist` already committed to the repo.)*
 
 ### 3. Access the Dashboard
 Open your browser and navigate to:
@@ -112,9 +124,9 @@ Open your browser and navigate to:
 
 ## 🧪 Technical Highlights
 
-- **The Hallucination Interceptor**: The LLM is forced to output JSON containing arrays of numbers. `narrative/guard.py` rips out every number the LLM produced and checks if it exists in the `Evidence` object passed to the prompt. If `42.5` appears in the text but wasn't computed by the deterministic engine, the generation is rejected.
-- **Isotonic Calibration**: `feedback/learn.py` maps non-linear heuristic scores (e.g. data freshness + volume = 74) to empirical accuracy probabilities (e.g. 88% chance this driver is correct) based on historical thumbs-up/down clicks.
-- **YouTube-Style Micro-Interactions**: The `InlineFeedback.tsx` React component uses custom bouncy cubic-bezier `@keyframes` and un-filled crisp SVG toggles to mimic the premium haptic feel of enterprise applications, completely shedding the "developer UI" aesthetic. 
+- **The Hallucination Interceptor**: The LLM is forced to output prose whose figures are checked against the evidence. `narrative/validator.py` extracts every number the LLM produced and confirms it's traceable to the `Evidence` object passed in the prompt. If a figure appears in the text but wasn't computed by the deterministic engine, the draft is rejected and one retry is attempted with the offending figures named explicitly.
+- **Isotonic Calibration**: `feedback/learn.py` fits an isotonic regression mapping the raw heuristic confidence score to the empirical rate at which insights at that score were actually judged correct by analysts, and Laplace-smooths per-driver priors so one bad week can't bury a driver's trust score. Both are persisted (not just computed) and re-applied by `engine/confidence.py` on the very next assessment — the loop actually closes.
+- **Honest offline fallback**: when no LLM provider is configured, `narrative/synthesize.py` routes through a deterministic template narrator rather than disguising an echo as a model call — the API reports `llm_called: false` and `source: "template fallback"` truthfully in that case.
 
 ---
 

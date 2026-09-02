@@ -5,6 +5,7 @@ __pycache__/
 # generated — rebuild with `python data/generate.py`
 data/raw/
 warehouse/*.duckdb
+warehouse/*.duckdb.wal
 
 .DS_Store
 .env
