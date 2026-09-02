@@ -242,6 +242,66 @@ def test_series_refuses_a_kpi_the_contract_does_not_define():
     assert r.status_code == 404
 
 
+# ------------------------------------------------------------ memoisation --
+
+def test_memoise_computes_once_for_concurrent_callers_of_the_same_key():
+    """
+    Checking the cache, releasing the lock and then computing let two callers
+    who missed on the same key both run the whole body. That is what happened
+    on a cold start: the warm-up thread and the first request computed the same
+    scope simultaneously, doubling ~10s of work and, under the GIL, halving the
+    CPU left for the request someone was waiting on.
+    """
+    import threading
+    import time as _time
+
+    from api.cache import memoise
+
+    runs: list[int] = []
+
+    @memoise
+    def slow(x: int) -> int:
+        runs.append(x)
+        _time.sleep(0.3)
+        return x * 2
+
+    got: list[int] = []
+    threads = [threading.Thread(target=lambda: got.append(slow(21))) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(runs) == 1, f"body ran {len(runs)} times for one key; must be single-flight"
+    assert got == [42] * 8, "every caller must still receive the value"
+
+
+def test_memoise_does_not_serialise_distinct_keys():
+    """
+    Single-flight must not become a global bottleneck — the per-key lock exists
+    precisely so unrelated scopes still compute in parallel.
+    """
+    import threading
+    import time as _time
+
+    from api.cache import memoise
+
+    @memoise
+    def slow(x: int) -> int:
+        _time.sleep(0.3)
+        return x
+
+    started = _time.perf_counter()
+    threads = [threading.Thread(target=slow, args=(i,)) for i in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    elapsed = _time.perf_counter() - started
+
+    assert elapsed < 1.2, f"distinct keys serialised ({elapsed:.2f}s for 6 x 0.3s)"
+
+
 def test_the_drill_reaches_the_planted_stockout():
     body = client.get("/v1/attribution", params={"week": WEEK, "persona": "cfo"}).json()
     path = {step["dimension"]: step["chosen"] for step in body["path"]}

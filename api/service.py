@@ -258,13 +258,20 @@ def llm_info() -> dict:
 COLD_PROFILE: dict[str, Any] = {}
 
 
-def warm(week: str = FOCAL_WEEK) -> None:
+def warm(week: str = FOCAL_WEEK, all_scopes: bool = True) -> None:
     """
-    Pre-compute the focal week for every distinct entitlement scope, recording
-    what each stage actually costs on the way through.
+    Pre-compute the focal week, recording what each stage actually costs.
 
     Without this the first click costs seven seconds, which reads as a broken
     demo rather than a thorough one.
+
+    `all_scopes` is the difference between a server and a serverless container.
+    A long-lived server will serve every persona eventually, so pre-computing
+    each entitlement scope is work that gets used. A serverless container is
+    short-lived and usually handles one page's worth of requests before it is
+    frozen, so the other personas' analyses are speculative — and paid for out
+    of the same CPU the request in flight is waiting on. There it warms only
+    the scope the cold profile is measured from.
     """
     import time
 
@@ -279,8 +286,13 @@ def warm(week: str = FOCAL_WEEK) -> None:
                        "ms": round((time.perf_counter() - t0) * 1000, 1)})
         return result
 
+    # The profile is measured from the CFO's scope, so time that one and let it
+    # be the scope that is warmed when we are only warming one.
+    cfo_scope_key = _key(scope_for("cfo"))
+    ordered = [cfo_scope_key] + [s for s in scopes if s != cfo_scope_key]
+
     first = True
-    for scope_key in scopes:
+    for scope_key in ordered:
         if first:
             timed("reconcile + detect (Rung 0)", lambda: movements_for(week, scope_key))
             timed("decompose (Rungs 1-2)", lambda: decomposition_for(week, scope_key))
@@ -288,6 +300,8 @@ def warm(week: str = FOCAL_WEEK) -> None:
             timed("assess + causal (Rungs 4-5)", lambda: assessment_for(week, scope_key))
             timed("levers", lambda: recommendations_for(week, scope_key))
             first = False
+            if not all_scopes:
+                break
         else:
             movements_for(week, scope_key)
             assessment_for(week, scope_key)
@@ -295,8 +309,7 @@ def warm(week: str = FOCAL_WEEK) -> None:
             drill_for(week, scope_key)
             recommendations_for(week, scope_key)
 
-    cfo_scope_key = _key(scope_for("cfo"))
-    n = timed("narrate", lambda: narrative_for(week, cfo_scope_key, "cfo"), kind="llm")
+    timed("narrate", lambda: narrative_for(week, cfo_scope_key, "cfo"), kind="llm")
 
     # a prompt-cache hit would understate the model's real cost, so prefer a
     # measured live call where one exists

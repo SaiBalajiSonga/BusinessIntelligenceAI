@@ -42,10 +42,30 @@ def _persona_ids() -> tuple[str, ...]:
 _ISO_WEEK = re.compile(r"^(\d{4})-W(\d{1,2})$")
 
 
-def _start_warmup() -> None:
+def _is_serverless() -> bool:
+    """
+    Are we running as a serverless function rather than a long-lived server?
+
+    Checked from several angles because `VERCEL` is a *system* environment
+    variable, which a project can be configured not to expose — and if the
+    only signal is missing, the warm-up below silently never starts and
+    /v1/processing-split answers "still warming" forever. Vercel's Python
+    runtime runs on Lambda and unpacks the deployment into /var/task (visible
+    in its own tracebacks), so that path is the signal that does not depend
+    on project settings.
+    """
+    return bool(
+        os.environ.get("VERCEL")
+        or os.environ.get("VERCEL_ENV")
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        or os.path.isdir("/var/task")
+    )
+
+
+def _start_warmup(all_scopes: bool = True) -> None:
     # warm in the background so the server answers /health immediately while
     # the focal week is being computed
-    threading.Thread(target=service.warm, daemon=True).start()
+    threading.Thread(target=service.warm, kwargs={"all_scopes": all_scopes}, daemon=True).start()
 
 
 @asynccontextmanager
@@ -54,15 +74,19 @@ async def lifespan(app: FastAPI):
     yield
 
 
-if os.environ.get("VERCEL"):
-    # Vercel's Python ASGI adapter (`vc_init.py`) forwards HTTP scopes
-    # straight to the app without ever sending the ASGI `lifespan` events, so
-    # the hook above never runs there and COLD_PROFILE would sit empty for
-    # the life of every container. Module import happens exactly once per
-    # cold container, before the first request scope arrives, so starting
-    # the same background warm-up here gives it the same head start the
-    # lifespan hook gives it locally.
-    _start_warmup()
+if _is_serverless():
+    # Vercel's Python ASGI adapter (`vc_init.py`) forwards HTTP scopes straight
+    # to the app without ever sending the ASGI `lifespan` events, so the hook
+    # above never runs there and COLD_PROFILE would sit empty for the life of
+    # every container. Module import happens exactly once per cold container,
+    # before the first request scope arrives, so this gives the warm-up the
+    # same head start the lifespan hook gives it locally.
+    #
+    # Only the measured scope is warmed here: a container that is frozen after
+    # one page of requests never uses the other personas' analyses, and
+    # computing them anyway spends the very CPU the in-flight request is
+    # waiting on.
+    _start_warmup(all_scopes=False)
 
 
 app = FastAPI(

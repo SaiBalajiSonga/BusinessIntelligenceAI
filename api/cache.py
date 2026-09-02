@@ -40,9 +40,25 @@ _LOCK = threading.Lock()
 
 
 def memoise(fn):
-    """Keyed on the call arguments. Thread-safe because uvicorn runs sync
-    endpoints in a worker pool and two clicks can land at once."""
+    """
+    Keyed on the call arguments, and single-flight per key.
+
+    Thread-safe matters here because uvicorn runs sync endpoints in a worker
+    pool and two clicks can land at once — but so does not computing the same
+    thing twice. Checking the store, releasing the lock and then computing
+    meant two callers who missed on the same key both ran the full assessment:
+    on a cold start the warm-up thread and the first real request raced to
+    compute exactly the same scope, doubling ~10s of pandas and statsmodels
+    work and, under the GIL, halving the CPU available to the request that
+    someone was actually waiting on.
+
+    So each key gets its own lock: the first caller computes, later callers for
+    that same key wait and take its result. The global lock is only ever held
+    for dict access, never across the computation, so unrelated keys still run
+    concurrently.
+    """
     store: dict[tuple, object] = {}
+    locks: dict[tuple, threading.Lock] = {}
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
@@ -51,13 +67,26 @@ def memoise(fn):
             if key in store:
                 STATS.hits += 1
                 return store[key]
-        value = fn(*args, **kwargs)
-        with _LOCK:
-            store[key] = value
-            STATS.misses += 1
-        return value
+            lock = locks.setdefault(key, threading.Lock())
 
-    wrapper.cache_clear = store.clear      # type: ignore[attr-defined]
+        with lock:
+            # Whoever held this lock before us may have just stored the value.
+            with _LOCK:
+                if key in store:
+                    STATS.hits += 1
+                    return store[key]
+            value = fn(*args, **kwargs)
+            with _LOCK:
+                store[key] = value
+                STATS.misses += 1
+                locks.pop(key, None)
+            return value
+
+    def cache_clear() -> None:
+        with _LOCK:
+            store.clear()
+
+    wrapper.cache_clear = cache_clear        # type: ignore[attr-defined]
     wrapper.cache_size = lambda: len(store)  # type: ignore[attr-defined]
     return wrapper
 
